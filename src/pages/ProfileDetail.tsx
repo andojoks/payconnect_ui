@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, ApiError, Notification, ProfileDetail, Session, Transaction } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -6,7 +6,7 @@ import { ReauthModal } from '../components/ReauthModal';
 import { TransactionDetailDialog } from '../components/Transaction/TransactionDetailDialog';
 import { useEventStream, useGlobalSearch, usePageActions, usePageMeta, useToast } from '../components/Shell';
 import { cx, formatDate, formatMoney, providerLabel, relativeTime, statusTone } from '../lib/format';
-import { ArrowLeft, ArrowLeftRight, Check, ChevronRight, Clock, Download, KeyRound, RefreshCw, Send, Smartphone, TriangleAlert, Unplug, Wifi } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, Check, ChevronLeft, ChevronRight, Clock, Download, KeyRound, RefreshCw, Send, Smartphone, TriangleAlert, Unplug, Wifi } from 'lucide-react';
 
 type Props = { session: Session };
 
@@ -33,6 +33,19 @@ function eventNotification(event: { profileId?: string; at: string; data?: Recor
   };
 }
 
+const alertFetchPageSize = 500;
+const alertFetchMax = 5000;
+
+async function fetchAllNotifications(profileId: string): Promise<Notification[]> {
+  const all: Notification[] = [];
+  for (let offset = 0; offset < alertFetchMax; offset += alertFetchPageSize) {
+    const page = await api.profileNotifications(profileId, { limit: alertFetchPageSize, offset });
+    all.push(...page);
+    if (page.length < alertFetchPageSize) break;
+  }
+  return all;
+}
+
 export function ProfileDetailPage({ session }: Props) {
   const { id = '' } = useParams();
   const location = useLocation();
@@ -41,6 +54,7 @@ export function ProfileDetailPage({ session }: Props) {
   const { query } = useGlobalSearch();
   const [profile, setProfile] = useState<ProfileDetail>();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -48,38 +62,40 @@ export function ProfileDetailPage({ session }: Props) {
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [busy, setBusy] = useState('');
   const [direction, setDirection] = useState('');
-  const [status, setStatus] = useState('SUCCESSFUL');
+  const [status, setStatus] = useState('');
+  const [txPage, setTxPage] = useState(1);
+  const [txPageSize, setTxPageSize] = useState(25);
+  const [txTotal, setTxTotal] = useState(0);
+  const [txLoading, setTxLoading] = useState(false);
+  const [alertSearch, setAlertSearch] = useState('');
+  const [alertCategory, setAlertCategory] = useState('');
+  const [alertRead, setAlertRead] = useState<'all' | 'unread' | 'read'>('all');
+  const [notifPage, setNotifPage] = useState(1);
+  const [notifPageSize, setNotifPageSize] = useState(25);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [showTransactionDetail, setShowTransactionDetail] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const [unreadOnly, setUnreadOnly] = useState(false);
-  const [txLimit, setTxLimit] = useState(100);
-  const [notifLimit, setNotifLimit] = useState(100);
 
   const tab = tabFromPath(location.pathname, id);
   const tabTitle = tab === 'overview' ? 'Profile overview' : tab === 'transactions' ? 'Profile transactions' : tab === 'alerts' ? 'Profile alerts' : tab === 'account' ? 'Profile account' : 'Profile connection';
   usePageMeta({ title: tabTitle });
 
-  async function refreshProfile() {
+  const refreshProfile = useCallback(async () => {
     try {
       setProfile(await api.profile(id));
     } catch {
       // Keep the last known profile on transient failures.
     }
-  }
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      api.profile(id),
-      api.profileTransactions(id, { limit: txLimit, direction }),
-      api.profileNotifications(id, { limit: notifLimit, unread: unreadOnly }),
-    ])
-      .then(([nextProfile, nextTransactions, nextNotifications]) => {
+    api.profile(id)
+      .then((nextProfile) => {
         if (cancelled) return;
         setProfile(nextProfile);
-        setTransactions(nextTransactions);
-        setNotifications(nextNotifications);
         setError('');
       })
       .catch((cause) => {
@@ -91,7 +107,69 @@ export function ProfileDetailPage({ session }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [id, direction, unreadOnly, txLimit, notifLimit]);
+  }, [id]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+      setTxPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const loadTransactions = useCallback(async () => {
+    if (tab !== 'transactions' && tab !== 'overview') return;
+    const table = tab === 'transactions';
+    const limit = table ? txPageSize : 5;
+    const offset = table ? (txPage - 1) * txPageSize : 0;
+    setTxLoading(true);
+    try {
+      const page = await api.profileTransactions(id, {
+        limit,
+        offset,
+        direction: table ? direction : '',
+        status: table ? status : '',
+        q: table ? debouncedQuery : '',
+      });
+      if (table) {
+        setTransactions(page.transactions);
+        setTxTotal(page.total);
+      } else {
+        setRecentTransactions(page.transactions);
+      }
+      setError('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to load transactions');
+    } finally {
+      setTxLoading(false);
+    }
+  }, [id, tab, txPage, txPageSize, direction, status, debouncedQuery]);
+
+  useEffect(() => {
+    void loadTransactions();
+  }, [loadTransactions]);
+
+  const loadNotifications = useCallback(async () => {
+    if (tab !== 'overview' && tab !== 'alerts') return;
+    setNotifLoading(true);
+    try {
+      setNotifications(await fetchAllNotifications(id));
+      setError('');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to load alerts');
+    } finally {
+      setNotifLoading(false);
+    }
+  }, [id, tab]);
+
+  useEffect(() => {
+    void loadNotifications();
+  }, [loadNotifications]);
+
+  const txTotalPages = Math.max(1, Math.ceil(txTotal / txPageSize));
+  useEffect(() => {
+    if (txPage > txTotalPages) setTxPage(txTotalPages);
+  }, [txPage, txTotalPages]);
 
   useEventStream(id ? `/api/v1/profiles/${id}/events/stream` : null, (event) => {
     if (event.profileId && event.profileId !== id) return;
@@ -125,7 +203,20 @@ export function ProfileDetailPage({ session }: Props) {
     if (event.type === 'transaction') {
       const transaction = data as unknown as Transaction;
       if (transaction?.id) {
-        setTransactions((items) => [transaction, ...items.filter((item) => item.id !== transaction.id)]);
+        // New payments can be painted immediately on the first page. Updates and
+        // filtered views re-read the active page so ordering and totals stay
+        // authoritative.
+        const filtered = Boolean(direction || status || debouncedQuery);
+        if (transaction.created !== false && !filtered && (tab === 'overview' || (tab === 'transactions' && txPage === 1))) {
+          if (tab === 'overview') {
+            setRecentTransactions((items) => [transaction, ...items.filter((item) => item.id !== transaction.id)].slice(0, 5));
+          } else {
+            setTransactions((items) => [transaction, ...items.filter((item) => item.id !== transaction.id)].slice(0, txPageSize));
+            setTxTotal((total) => total + 1);
+          }
+        } else {
+          void loadTransactions();
+        }
         // Alerts upsert by provider transaction id: only count a row when it is
         // genuinely new. Later syncs update the row in place. The toast for this
         // payment is raised once by Shell from the matching "notification" event.
@@ -137,21 +228,32 @@ export function ProfileDetailPage({ session }: Props) {
     if (event.type === 'transactions') {
       // A sync upserts missing rows; reload so the table reflects the merge
       // without duplicating rows that already arrived over SSE.
-      void api
-        .profileTransactions(id, { limit: txLimit, direction })
-        .then((items) => setTransactions(items))
-        .catch(() => undefined);
+      void loadTransactions();
+      void refreshProfile();
     }
     if (event.type === 'balance') {
       setProfile((current) => (current ? { ...current, balance: data as unknown as ProfileDetail['balance'], balanceObservedAt: event.at } : current));
     }
-    if (event.type === 'sync' && data.status === 'error') {
-      // Auto-open reauth dialog on sync failure so the user can refresh
-      // the provider session without having to click a separate button.
-      setReauth(true);
-      // Shell raises the failure toast from the global stream; toasting here as
-      // well produced a second copy in a different colour (danger vs warning).
-      setProfile((current) => (current ? { ...current, syncStatus: String(data.status ?? current.syncStatus) } : current));
+    if (event.type === 'sync') {
+      const nextStatus = String(data.status ?? '');
+      if (nextStatus === 'running') {
+        setProfile((current) => (current ? { ...current, syncStatus: 'running' } : current));
+      } else if (nextStatus === 'idle') {
+        setProfile((current) => (current ? { ...current, syncStatus: 'idle' } : current));
+        void refreshProfile();
+        void loadTransactions();
+        void loadNotifications();
+      } else if (nextStatus === 'error') {
+        // Auto-open reauth dialog on sync failure so the user can refresh
+        // the provider session without having to click a separate button.
+        setReauth(true);
+        // Shell raises the failure toast from the global stream; toasting here as
+        // well produced a second copy in a different colour (danger vs warning).
+        setProfile((current) =>
+          current ? { ...current, syncStatus: 'error', syncError: String(data.error ?? '') } : current,
+        );
+        void refreshProfile();
+      }
     }
     if (event.type === 'fcm') {
       setProfile((current) =>
@@ -166,89 +268,62 @@ export function ProfileDetailPage({ session }: Props) {
     }
   });
 
-  const filteredTransactions = useMemo(() => {
-    const search = query.trim().toLowerCase();
-    return transactions.filter((transaction) => {
-      const matchesSearch =
-        !search ||
-        [transaction.reference, transaction.providerTransactionId, transaction.direction, transaction.status, transaction.amount]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(search));
-      const matchesDirection = !direction || transaction.direction.toUpperCase() === direction.toUpperCase();
-      const matchesStatus = !status || transaction.status.toLowerCase() === status.toLowerCase();
-      return matchesSearch && matchesDirection && matchesStatus;
-    });
-  }, [transactions, query, direction, status]);
+  const alertCategories = useMemo(
+    () => Array.from(new Set(notifications.map((item) => item.category).filter((value): value is string => Boolean(value)))).sort(),
+    [notifications],
+  );
 
   const filteredNotifications = useMemo(() => {
-    const search = query.trim().toLowerCase();
-    if (!search) return notifications;
-    return notifications.filter((notification) =>
-      [notification.title, notification.body, notification.category, notification.routedTo, notification.phoneNumber]
+    const global = query.trim().toLowerCase();
+    const local = alertSearch.trim().toLowerCase();
+    return notifications.filter((notification) => {
+      const haystack = [notification.title, notification.body, notification.category, notification.routedTo, notification.phoneNumber]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(search)),
-    );
-  }, [notifications, query]);
+        .map((value) => String(value).toLowerCase());
+      const matchesGlobal = !global || haystack.some((value) => value.includes(global));
+      const matchesLocal = !local || haystack.some((value) => value.includes(local));
+      const matchesCategory = !alertCategory || notification.category === alertCategory;
+      const matchesRead = alertRead === 'all' || (alertRead === 'unread' ? !notification.readAt : Boolean(notification.readAt));
+      return matchesGlobal && matchesLocal && matchesCategory && matchesRead;
+    });
+  }, [notifications, query, alertSearch, alertCategory, alertRead]);
+
+  const notifTotalPages = Math.max(1, Math.ceil(filteredNotifications.length / notifPageSize));
+  const pagedNotifications = useMemo(
+    () => filteredNotifications.slice((notifPage - 1) * notifPageSize, notifPage * notifPageSize),
+    [filteredNotifications, notifPage, notifPageSize],
+  );
+
+  useEffect(() => {
+    if (notifPage > notifTotalPages) setNotifPage(notifTotalPages);
+  }, [notifPage, notifTotalPages]);
+
+  useEffect(() => {
+    setNotifPage(1);
+  }, [alertSearch, alertCategory, alertRead, query, notifPageSize]);
 
   const unread = notifications.filter((item) => !item.readAt).length;
 
   const pageActions = useMemo(() => {
     if (!profile) return null;
     return (
-      <>
-        {tab === 'transactions' && (
-          <div className="flex gap-2">
-            <select
-              className="select w-full"
-              aria-label="Filter transactions by type"
-              onChange={(e) => setDirection(e.target.value === 'all' ? '' : e.target.value)}
-              value={direction || 'all'}
-            >
-              <option value="all">All</option>
-              <option value="PAYMENT">Payment</option>
-              <option value="DEBIT">Debit</option>
-              <option value="CASH_IN">Cash In</option>
-              <option value="CASH_OUT">Cash Out</option>
-              <option value="TRANSFER">Transfer</option>
-              <option value="BILL_PAYMENT">Bill Payment</option>
-              <option value="PAYMENT_SEND">Payment Send</option>
-            </select>
-            <select
-              className="select w-full"
-              aria-label="Filter transactions by status"
-              onChange={(e) => setStatus(e.target.value === 'all' ? '' : e.target.value)}
-              value={status || 'all'}
-            >
-              <option value="all">All</option>
-              <option value="SUCCESSFUL">Successful</option>
-              <option value="FAILED">Failed</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
-          </div>
-        )}
-        {tab === 'alerts' && (
-          <>
-            <label className="switch">
-              <input type="checkbox" checked={unreadOnly} onChange={(event) => setUnreadOnly(event.target.checked)} />
-              <span>Unread only</span>
-            </label>
-            <button className="ghost small" onClick={() => void markAllRead()} disabled={unread === 0}>
-              <Check size={18} /> Mark all read
-            </button>
-          </>
-        )}
-        <button
-          className="icon-button"
-          onClick={() => void sync()}
-          disabled={busy === 'sync'}
-          title={busy === 'sync' ? 'Syncing…' : 'Sync now'}
-          aria-label={busy === 'sync' ? 'Syncing' : 'Sync now'}
-        >
-          <RefreshCw size={18} />
-        </button>
-      </>
+      <button
+        className="icon-button"
+        onClick={() => void sync()}
+        disabled={busy === 'sync'}
+        title={
+          busy === 'sync'
+            ? 'Syncing…'
+            : profile.lastSyncedAt
+              ? `Sync now · last synced ${relativeTime(profile.lastSyncedAt)}`
+              : 'Sync now'
+        }
+        aria-label={busy === 'sync' ? 'Syncing' : 'Sync now'}
+      >
+        <RefreshCw size={18} />
+      </button>
     );
-  }, [profile, tab, direction, status, unreadOnly, unread, busy]);
+  }, [profile, busy]);
 
   usePageActions(pageActions);
 
@@ -257,7 +332,7 @@ export function ProfileDetailPage({ session }: Props) {
     try {
       await api.syncProfile(id);
       setProfile((current) => (current ? { ...current, syncStatus: 'running' } : current));
-      pushToast({ title: 'Synchronization started', body: 'Balance, history, and provider notifications are refreshing in the background.', tone: 'info' });
+      pushToast({ title: 'Synchronization started', body: 'New balance, transactions since the last sync, and provider alerts are refreshing in the background.', tone: 'info' });
       window.setTimeout(() => void refreshProfile(), 2500);
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 409 && cause.message.toLowerCase().includes('session')) {
@@ -401,7 +476,7 @@ export function ProfileDetailPage({ session }: Props) {
                     <Link className="subtle" to={`/profiles/${id}/transactions`}>View all <ChevronRight size={18} /></Link>
                   </div>
                   <div className="list">
-                    {transactions.slice(0, 5).map((transaction) => {
+                    {recentTransactions.map((transaction) => {
                         const typeMap: Record<string, string> = {
                           CREDIT: 'Credit',
                           DEBIT: 'Debit',
@@ -449,7 +524,7 @@ export function ProfileDetailPage({ session }: Props) {
                           </div>
                         );
                       })}
-                    {transactions.length === 0 && <p className="muted empty-inline">No transactions have been synchronized yet.</p>}
+                    {recentTransactions.length === 0 && <p className="muted empty-inline">No transactions have been synchronized yet.</p>}
                   </div>
                 </section>
 
@@ -481,8 +556,65 @@ export function ProfileDetailPage({ session }: Props) {
 
           {tab === 'transactions' && (
             <div className="stack-lg">
-              <div className="toolbar">
-                <span className="muted small-text">Use the search in the app bar to filter this table.</span>
+              <div className="page-toolbar">
+                <div>
+                  <h2>Transaction history</h2>
+                  <p className="page-lede">Synchronized MoMo history. Filters are applied by the API before pagination.</p>
+                  <div className="sync-meta">
+                    <span className={cx('pill', statusTone(profile.syncStatus))}>
+                      {profile.syncStatus === 'running' ? 'Syncing' : `Sync ${profile.syncStatus}`}
+                    </span>
+                    <span className="muted small-text">
+                      {profile.syncStatus === 'running'
+                        ? 'Pulling transactions since the last sync…'
+                        : profile.lastSyncedAt
+                          ? `Last synced ${relativeTime(profile.lastSyncedAt)} · ${formatDate(profile.lastSyncedAt)}`
+                          : 'Never synced'}
+                    </span>
+                  </div>
+                </div>
+                <div className="page-actions">
+                  <select
+                    className="filter-select"
+                    aria-label="Filter transactions by direction"
+                    value={direction}
+                    onChange={(event) => {
+                      setTxPage(1);
+                      setDirection(event.target.value);
+                    }}
+                  >
+                    <option value="">All directions</option>
+                    <option value="CREDIT">Credit</option>
+                    <option value="DEBIT">Debit</option>
+                    <option value="TRANSFER">Transfer</option>
+                  </select>
+                  <select
+                    className="filter-select"
+                    aria-label="Filter transactions by status"
+                    value={status}
+                    onChange={(event) => {
+                      setTxPage(1);
+                      setStatus(event.target.value);
+                    }}
+                  >
+                    <option value="">All statuses</option>
+                    <option value="SUCCESSFUL">Successful</option>
+                    <option value="FAILED">Failed</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
+                  {(direction || status) && (
+                    <button
+                      className="ghost small"
+                      onClick={() => {
+                        setTxPage(1);
+                        setDirection('');
+                        setStatus('');
+                      }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="table-wrap">
                 <table className="table">
@@ -497,7 +629,7 @@ export function ProfileDetailPage({ session }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTransactions.map((transaction) => (
+                    {transactions.map((transaction) => (
                       <tr
                         key={transaction.id}
                         className="clickable"
@@ -523,20 +655,89 @@ export function ProfileDetailPage({ session }: Props) {
                     ))}
                   </tbody>
                 </table>
-                {filteredTransactions.length === 0 && <p className="muted empty-inline">No transactions match this view.</p>}
+                {txLoading && transactions.length === 0 && <p className="muted empty-inline">Loading transactions…</p>}
+                {!txLoading && transactions.length === 0 && <p className="muted empty-inline">No transactions match this view.</p>}
               </div>
-              {transactions.length >= txLimit && (
-                <div className="load-more">
-                  <button className="ghost" onClick={() => setTxLimit((value) => value + 100)}>Load more transactions</button>
+              <div className="pagination">
+                <span className="muted small-text">
+                  {txTotal === 0
+                    ? 'No transactions'
+                    : `Showing ${(txPage - 1) * txPageSize + 1}–${Math.min(txPage * txPageSize, txTotal)} of ${txTotal}`}
+                  {txLoading && txTotal > 0 ? ' · Updating…' : ''}
+                </span>
+                <div className="pagination-actions">
+                  <label className="pagination-size">
+                    Rows
+                    <select value={txPageSize} onChange={(event) => setTxPageSize(Number(event.target.value))}>
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </label>
+                  <button className="ghost small" disabled={txPage <= 1 || txLoading} onClick={() => setTxPage((page) => Math.max(1, page - 1))}>
+                    <ChevronLeft size={16} /> Prev
+                  </button>
+                  <span className="pagination-page">Page {txPage} of {txTotalPages}</span>
+                  <button className="ghost small" disabled={txPage >= txTotalPages || txLoading} onClick={() => setTxPage((page) => page + 1)}>
+                    Next <ChevronRight size={16} />
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
           {tab === 'alerts' && (
             <div className="stack-lg">
-              <div className="toolbar">
-                <span className="muted small-text">Use the search in the app bar to filter this table.</span>
+              <div className="page-toolbar">
+                <div>
+                  <h2>Alerts</h2>
+                  <p className="page-lede">Provider notifications stored for this profile. Filtering and pagination run locally.</p>
+                  <div className="sync-meta">
+                    <span className={cx('pill', statusTone(profile.syncStatus))}>
+                      {profile.syncStatus === 'running' ? 'Syncing' : `Sync ${profile.syncStatus}`}
+                    </span>
+                    <span className="muted small-text">
+                      {profile.lastSyncedAt
+                        ? `Last synced ${relativeTime(profile.lastSyncedAt)} · ${formatDate(profile.lastSyncedAt)}`
+                        : 'Never synced'}
+                    </span>
+                  </div>
+                </div>
+                <div className="page-actions">
+                  <input
+                    className="filter-input"
+                    type="search"
+                    placeholder="Filter alerts"
+                    aria-label="Filter alerts"
+                    value={alertSearch}
+                    onChange={(event) => setAlertSearch(event.target.value)}
+                  />
+                  <select
+                    className="filter-select"
+                    aria-label="Filter alerts by category"
+                    value={alertCategory}
+                    onChange={(event) => setAlertCategory(event.target.value)}
+                  >
+                    <option value="">All categories</option>
+                    {alertCategories.map((category) => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                  <select
+                    className="filter-select"
+                    aria-label="Filter alerts by read state"
+                    value={alertRead}
+                    onChange={(event) => setAlertRead(event.target.value as 'all' | 'unread' | 'read')}
+                  >
+                    <option value="all">All alerts</option>
+                    <option value="unread">Unread</option>
+                    <option value="read">Read</option>
+                  </select>
+                  <button className="ghost small" onClick={() => void markAllRead()} disabled={unread === 0}>
+                    <Check size={18} /> Mark all read
+                  </button>
+                </div>
               </div>
               <div className="table-wrap">
                 <table className="table">
@@ -551,7 +752,7 @@ export function ProfileDetailPage({ session }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredNotifications.map((notification) => (
+                    {pagedNotifications.map((notification) => (
                       <tr key={notification.id} className={cx(!notification.readAt && 'unread-row')}>
                         <td>
                           <div className="alert-cell">
@@ -580,13 +781,36 @@ export function ProfileDetailPage({ session }: Props) {
                     ))}
                   </tbody>
                 </table>
-                {filteredNotifications.length === 0 && <p className="muted empty-inline">No alerts match this view.</p>}
+                {notifLoading && pagedNotifications.length === 0 && <p className="muted empty-inline">Loading alerts…</p>}
+                {!notifLoading && filteredNotifications.length === 0 && <p className="muted empty-inline">No alerts match this view.</p>}
               </div>
-              {notifications.length >= notifLimit && (
-                <div className="load-more">
-                  <button className="ghost" onClick={() => setNotifLimit((value) => value + 100)}>Load more alerts</button>
+              <div className="pagination">
+                <span className="muted small-text">
+                  {filteredNotifications.length === 0
+                    ? 'No alerts'
+                    : `Showing ${(notifPage - 1) * notifPageSize + 1}–${Math.min(notifPage * notifPageSize, filteredNotifications.length)} of ${filteredNotifications.length}`}
+                  {notifications.length !== filteredNotifications.length ? ` · ${notifications.length} loaded` : ''}
+                  {notifLoading ? ' · Updating…' : ''}
+                </span>
+                <div className="pagination-actions">
+                  <label className="pagination-size">
+                    Rows
+                    <select value={notifPageSize} onChange={(event) => setNotifPageSize(Number(event.target.value))}>
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </label>
+                  <button className="ghost small" disabled={notifPage <= 1 || notifLoading} onClick={() => setNotifPage((page) => Math.max(1, page - 1))}>
+                    <ChevronLeft size={16} /> Prev
+                  </button>
+                  <span className="pagination-page">Page {notifPage} of {notifTotalPages}</span>
+                  <button className="ghost small" disabled={notifPage >= notifTotalPages || notifLoading} onClick={() => setNotifPage((page) => page + 1)}>
+                    Next <ChevronRight size={16} />
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           )}
 

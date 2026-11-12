@@ -51,6 +51,13 @@ export type Transaction = {
   source?: string;
 };
 
+export type TransactionPage = {
+  transactions: Transaction[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type Notification = {
   id: string;
   profileId: string;
@@ -251,8 +258,8 @@ export const api = {
 
   transactions: () => request<Transaction[]>('/api/v1/transactions'),
   notifications: (limit = 100) => request<Notification[]>(`/api/v1/notifications${queryString({ limit })}`),
-  profileTransactions: (id: string, options: { limit?: number; offset?: number; direction?: string } = {}) =>
-    request<Transaction[]>(`/api/v1/profiles/${id}/transactions${queryString(options)}`),
+  profileTransactions: (id: string, options: { limit?: number; offset?: number; direction?: string; status?: string; q?: string } = {}) =>
+    request<TransactionPage>(`/api/v1/profiles/${id}/transactions${queryString({ ...options, paged: true })}`),
   profileNotifications: (id: string, options: { limit?: number; offset?: number; unread?: boolean } = {}) =>
     request<Notification[]>(`/api/v1/profiles/${id}/notifications${queryString(options)}`),
   markNotificationRead: (profileId: string, notificationId: string) =>

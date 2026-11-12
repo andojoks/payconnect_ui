@@ -181,6 +181,14 @@ form { display: grid; gap: 18px; margin-top: 30px; }
   font-size: 0.8rem;
   border-radius: 8px;
 }
+.page-actions .filter-select { width: auto; min-width: 150px; }
+.page-actions .filter-input { width: min(220px, 100%); }
+.sync-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pagination-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pagination-size { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--muted); }
+.pagination-size select { width: auto; padding: 6px 8px; }
+.pagination-page { min-width: 90px; text-align: center; font-size: 0.8rem; color: var(--muted); }
 
 /* ---------- Stat cards ---------- */
 .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }

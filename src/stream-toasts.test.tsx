@@ -87,7 +87,9 @@ function stubBackend() {
         body = [summary];
       } else if (path === `/api/v1/profiles/${PROFILE_ID}`) {
         body = detail;
-      } else if (path.endsWith('/transactions') || path.endsWith('/notifications')) {
+      } else if (path.endsWith('/transactions')) {
+        body = { transactions: [], total: 0, limit: 25, offset: 0 };
+      } else if (path.endsWith('/notifications')) {
         body = [];
       }
       const text = JSON.stringify(body);
