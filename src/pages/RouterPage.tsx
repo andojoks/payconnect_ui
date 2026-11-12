@@ -1,4 +1,4 @@
-﻿import { FormEvent, useEffect, useMemo, useState } from 'react';
+﻿import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, Service, Session } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -107,7 +107,27 @@ function CodeTabs({ active, options, onChange }: { active: string; options: stri
 
 function CodeBlock({ lang, active, children }: { lang: string; active: string; children: React.ReactNode }) {
   if (lang !== active) return null;
-  return <pre className="code-block">{children}</pre>;
+  const preRef = useRef<HTMLPreElement>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (copied) {
+      const t = setTimeout(() => setCopied(false), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [copied]);
+  async function handleCopy() {
+    const text = preRef.current?.innerText ?? '';
+    await navigator.clipboard?.writeText(text);
+    setCopied(true);
+  }
+  return (
+    <div className="code-wrap">
+      <pre ref={preRef} className="code-block">{children}</pre>
+      <button className="copy-btn" onClick={handleCopy} aria-label="Copy code" title="Copy code">
+        {copied ? 'Copied!' : <Copy size={14} />}
+      </button>
+    </div>
+  );
 }
 
 export function RouterPage({ session }: Props) {
@@ -346,7 +366,7 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
       </div>
 
       <section className="card">
-        <div className="card-head"><div><h3>Overview</h3><p>Two integration surfaces: inbound callbacks (PayConnect &rarr; your endpoint) and outbound intents (your system &rarr; PayConnect).</p></div></div>
+        <div className="card-head"><div><h3>Overview</h3>          <p>Two integration surfaces: outbound callbacks (PayConnect &rarr; your endpoint) and inbound collections (your system &rarr; PayConnect).</p></div></div>
         <div className="details">
           <div><dt>Base URL</dt><dd className="mono">{import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}</dd></div>
           <div><dt>Auth</dt><dd>Session cookie for management APIs; service secret for <code>/collect</code>.</dd></div>
@@ -365,7 +385,7 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
       </section>
 
       <section className="card">
-        <div className="card-head"><div><h3>Inbound callbacks (PayConnect &rarr; your endpoint)</h3><p>PayConnect POSTs matching MoMo alerts to your callback URL. Verify the HMAC signature before processing.</p></div></div>
+        <div className="card-head"><div><h3>Outbound callbacks (PayConnect &rarr; your endpoint)</h3><p>PayConnect POSTs matching MoMo alerts to your callback URL. Verify the HMAC signature before processing.</p></div></div>
 
         <div className="section-head"><div><h4>Request</h4></div></div>
         <div className="details">
@@ -502,122 +522,28 @@ public class Callback {
             </tbody>
           </table>
         </div>
-      </section>
 
-      <section className="card">
-        <div className="card-head"><div><h3>Outbound intents (your system &rarr; PayConnect)</h3><p>Create a collection intent so PayConnect expects and matches an incoming MoMo payment for a profile.</p></div></div>
-
-        <div className="section-head"><div><h4>Create intent</h4></div></div>
-        <div className="details">
-          <div><dt>Method</dt><dd><code>POST</code></dd></div>
-          <div><dt>URL</dt><dd className="mono">{import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}/api/v1/services/{"{serviceId}"}/intents</dd></div>
-          <div><dt>Auth</dt><dd>Session cookie (services:manage permission).</dd></div>
-          <div><dt>Content-Type</dt><dd><code>application/json</code></dd></div>
-        </div>
-
-        <div className="section-head"><div><h4>Headers</h4></div></div>
+        <div className="section-head"><div><h4>Callback event types</h4></div></div>
         <div className="table-wrap">
           <table className="table">
-            <thead><tr><th>Header</th><th>Value</th></tr></thead>
+            <thead><tr><th>Event</th><th>Meaning</th></tr></thead>
             <tbody>
-              <tr><td><code>Content-Type</code></td><td><code>application/json</code></td></tr>
+              <tr><td><code>collection.intent</code></td><td>A collection intent was created; PayConnect now expects a matching MoMo payment.</td></tr>
+              <tr><td><code>collection</code></td><td>A collection was posted to <code>/api/v1/collect</code> by an external system.</td></tr>
+              <tr><td><code>collection.matched</code></td><td>An incoming MoMo alert matched a pending intent; this is POSTed to your callback URL.</td></tr>
             </tbody>
           </table>
         </div>
+      </section>
 
-        <div className="section-head"><div><h4>Body</h4></div></div>
-        <pre className="code-block">{`{
-  "profileId": "uuid",
-  "phoneNumber": "+237XXXXXXXX",
-  "amount": 5000,
-  "currency": "XAF",
-  "reference": "INV-1001",
-  "expiresInMinutes": 30
-}`}</pre>
+      <section className="card">
+        <div className="card-head"><div><h3>Inbound: post a collection (your system &rarr; PayConnect)</h3><p>External systems push a collection alert to PayConnect so it is matched against pending intents and routed to attached callback URLs. Authentication uses service headers, not a session cookie.</p></div></div>
 
-        <div className="details">
-          <div><dt>profileId</dt><dd>MoMo profile UUID (must be visible to this service).</dd></div>
-          <div><dt>phoneNumber</dt><dd>Payer number; defaults to the profile&apos;s number if omitted.</dd></div>
-          <div><dt>amount</dt><dd>Expected amount (positive).</dd></div>
-          <div><dt>currency</dt><dd>Defaults to <code>XAF</code>.</dd></div>
-          <div><dt>reference</dt><dd>Your reference, matched against incoming alerts.</dd></div>
-          <div><dt>expiresInMinutes</dt><dd>1&ndash;1440; defaults to 30.</dd></div>
-        </div>
-
-        <div className="section-head"><div><h4>Response (201)</h4></div></div>
-        <pre className="code-block">{`{
-  "id": "uuid",
-  "status": "pending",
-  "profileId": "uuid",
-  "phoneNumber": "+237XXXXXXXX",
-  "amount": 5000,
-  "currency": "XAF",
-  "expiresInMinutes": 30
-}`}</pre>
-
-        <div className="section-head"><div><h4>Code examples</h4></div></div>
-        <div className="code-tabs">
-          <CodeTabs active={intentLang} options={['JavaScript', 'Python', 'Java']} onChange={setIntentLang} />
-        </div>
-        <CodeBlock lang="JavaScript" active={intentLang}>
-          {`// JavaScript (fetch)
-const res = await fetch('http://localhost:8080/api/v1/services/{serviceId}/intents', {
-  method: 'POST',
-  credentials: 'include',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    profileId: 'uuid',
-    phoneNumber: '+237XXXXXXXX',
-    amount: 5000,
-    currency: 'XAF',
-    reference: 'INV-1001',
-    expiresInMinutes: 30,
-  }),
-});
-if (!res.ok) throw new Error(await res.text());
-const intent = await res.json(); // { id, status: 'pending', ... }`}
-        </CodeBlock>
-        <CodeBlock lang="Python" active={intentLang}>
-          {`# Python (requests)
-import requests
-
-url = 'http://localhost:8080/api/v1/services/{serviceId}/intents'
-payload = {
-    'profileId': 'uuid',
-    'phoneNumber': '+237XXXXXXXX',
-    'amount': 5000,
-    'currency': 'XAF',
-    'reference': 'INV-1001',
-    'expiresInMinutes': 30,
-}
-res = requests.post(url, json=payload, cookies=session_cookies)
-res.raise_for_status()
-intent = res.json()`}
-        </CodeBlock>
-        <CodeBlock lang="Java" active={intentLang}>
-          {`// Java (HttpClient)
-HttpRequest request = HttpRequest.newBuilder()
-    .uri(URI.create("http://localhost:8080/api/v1/services/{serviceId}/intents"))
-    .header("Content-Type", "application/json")
-    .POST(HttpRequest.BodyPublishers.ofString("""
-        {
-          "profileId": "uuid",
-          "phoneNumber": "+237XXXXXXXX",
-          "amount": 5000,
-          "currency": "XAF",
-          "reference": "INV-1001",
-          "expiresInMinutes": 30
-        }
-    """))
-    .build();
-HttpResponse<String> res = client.send(request, BodyHandlers.ofString());`}
-        </CodeBlock>
-
-        <div className="section-head"><div><h4>Submit a collection directly</h4><p>Push a one-off collection to all routes attached to a profile.</p></div></div>
+        <div className="section-head"><div><h4>Endpoint</h4></div></div>
         <div className="details">
           <div><dt>Method</dt><dd><code>POST</code></dd></div>
           <div><dt>URL</dt><dd className="mono">{import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}/api/v1/collect</dd></div>
-          <div><dt>Auth</dt><dd>Headers: <code>X-PayConnect-Service</code> (service ID) and <code>X-PayConnect-Secret</code> (signing secret).</dd></div>
+          <div><dt>Auth</dt><dd>Headers: <code>X-PayConnect-Service</code> (service ID) and <code>X-PayConnect-Secret</code> (signing secret). No session cookie is used for external integrations.</dd></div>
           <div><dt>Content-Type</dt><dd><code>application/json</code></dd></div>
         </div>
 
@@ -644,6 +570,9 @@ HttpResponse<String> res = client.send(request, BodyHandlers.ofString());`}
 
         <div className="details">
           <div><dt>idempotencyKey</dt><dd>Required; deduplicates retries across services.</dd></div>
+          <div><dt>amount</dt><dd>Positive number.</dd></div>
+          <div><dt>currency</dt><dd>Defaults to <code>XAF</code>.</dd></div>
+          <div><dt>reference</dt><dd>Your reference, matched against incoming alerts.</dd></div>
         </div>
 
         <div className="section-head"><div><h4>Response (202)</h4></div></div>
@@ -651,6 +580,73 @@ HttpResponse<String> res = client.send(request, BodyHandlers.ofString());`}
   "eventId": "uuid",
   "deliveries": 1
 }`}</pre>
+
+        <div className="section-head"><div><h4>Code examples</h4></div></div>
+        <div className="code-tabs">
+          <CodeTabs active={intentLang} options={['JavaScript', 'Python', 'Java']} onChange={setIntentLang} />
+        </div>
+        <CodeBlock lang="JavaScript" active={intentLang}>
+          {`// JavaScript (fetch)
+const res = await fetch('http://localhost:8080/api/v1/collect', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-PayConnect-Service': 'service-id',
+    'X-PayConnect-Secret': 'signing-secret',
+  },
+  body: JSON.stringify({
+    phoneNumber: '+237XXXXXXXX',
+    amount: 5000,
+    currency: 'XAF',
+    idempotencyKey: 'unique-key',
+    reference: 'INV-1001',
+  }),
+});
+if (!res.ok) throw new Error(await res.text());
+const result = await res.json(); // { eventId, deliveries }`}
+        </CodeBlock>
+        <CodeBlock lang="Python" active={intentLang}>
+          {`# Python (requests)
+import requests
+
+url = 'http://localhost:8080/api/v1/collect'
+headers = {
+    'Content-Type': 'application/json',
+    'X-PayConnect-Service': 'service-id',
+    'X-PayConnect-Secret': 'signing-secret',
+}
+payload = {
+    'phoneNumber': '+237XXXXXXXX',
+    'amount': 5000,
+    'currency': 'XAF',
+    'idempotencyKey': 'unique-key',
+    'reference': 'INV-1001',
+}
+res = requests.post(url, json=payload, headers=headers)
+res.raise_for_status()
+result = res.json()`}
+        </CodeBlock>
+        <CodeBlock lang="Java" active={intentLang}>
+          {`// Java (HttpClient)
+HttpRequest request = HttpRequest.newBuilder()
+    .uri(URI.create("http://localhost:8080/api/v1/collect"))
+    .header("Content-Type", "application/json")
+    .header("X-PayConnect-Service", "service-id")
+    .header("X-PayConnect-Secret", "signing-secret")
+    .POST(HttpRequest.BodyPublishers.ofString("""
+        {
+          "phoneNumber": "+237XXXXXXXX",
+          "amount": 5000,
+          "currency": "XAF",
+          "idempotencyKey": "unique-key",
+          "reference": "INV-1001"
+        }
+    """))
+    .build();
+HttpResponse<String> res = client.send(request, BodyHandlers.ofString());`}
+        </CodeBlock>
+
+        <div className="section-head"><div><h4>Collection intents (PayConnect UI only)</h4><p>Intents are created through the PayConnect dashboard with <code>{'POST /api/v1/services/{id}/intents'}</code>, which requires a PayConnect session cookie (<code>services:manage</code> permission). External systems do not call this endpoint; they post collections to <code>/api/v1/collect</code> above.</p></div></div>
       </section>
 
       <section className="card">
