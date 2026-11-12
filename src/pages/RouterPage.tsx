@@ -376,15 +376,6 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
       </section>
 
       <section className="card">
-        <div className="card-head"><div><h3>Prerequisites</h3><p>Create a route, attach profiles, then copy the signing secret.</p></div></div>
-        <ol className="stack" style={{ paddingLeft: 20, marginTop: 12 }}>
-          <li>POST <code>/api/v1/services</code> with name, description, and HTTPS callback URL. The response includes a one-time <code>secret</code>.</li>
-          <li>POST <code>{'/api/v1/services/{id}/profiles'}</code> with <code>{"profileId"}</code> for each MoMo profile whose alerts should route here.</li>
-          <li>Open the route to reveal the signing secret, or rotate it with POST <code>{'/api/v1/services/{id}/secret/rotate'}</code>.</li>
-        </ol>
-      </section>
-
-      <section className="card">
         <div className="card-head"><div><h3>Outbound callbacks (PayConnect &rarr; your endpoint)</h3><p>PayConnect POSTs matching MoMo alerts to your callback URL. Verify the HMAC signature before processing.</p></div></div>
 
         <div className="section-head"><div><h4>Request</h4></div></div>
@@ -570,9 +561,10 @@ public class Callback {
 
         <div className="details">
           <div><dt>idempotencyKey</dt><dd>Required; deduplicates retries across services.</dd></div>
-          <div><dt>amount</dt><dd>Positive number.</dd></div>
-          <div><dt>currency</dt><dd>Defaults to <code>XAF</code>.</dd></div>
-          <div><dt>reference</dt><dd>Your reference, matched against incoming alerts.</dd></div>
+          <div><dt>phoneNumber</dt><dd>Payer number; used to match against pending intents.</dd></div>
+          <div><dt>amount</dt><dd>Expected amount; must match the pending intent amount within 0.01.</dd></div>
+          <div><dt>currency</dt><dd>Defaults to <code>XAF</code>; must match the pending intent currency.</dd></div>
+          <div><dt>reference</dt><dd>Informational only; not used for matching.</dd></div>
         </div>
 
         <div className="section-head"><div><h4>Response (202)</h4></div></div>
