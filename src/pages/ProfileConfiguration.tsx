@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, ProfileDetail } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { usePageMeta, useToast } from '../components/Shell';
+import { usePageMeta, useToast } from '../components/layout/Shell';
 import { cx, formatDate, relativeTime, statusTone } from '../lib/format';
-import { useProfileContext } from './ProfileLayout';
+import { useProfileContext } from '../components/layout/ProfileLayout';
 import { KeyRound, Unplug, Wifi } from 'lucide-react';
 
 export function ProfileConfigurationPage() {

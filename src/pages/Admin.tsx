@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, AdminUser, ProfileAccess, ProfileSummary, Role, Session } from '../api';
-import { useGlobalSearch, usePageMeta } from '../components/Shell';
+import { useGlobalSearch, usePageMeta } from '../components/layout/Shell';
 import { cx, formatDate } from '../lib/format';
 import { KeyRound, RefreshCw, Shield, Users } from 'lucide-react';
 

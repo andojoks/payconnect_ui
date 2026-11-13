@@ -47,7 +47,7 @@ describe('PayConnect app', () => {
     stubUnauthenticatedSession();
     render(<BrowserRouter><App /></BrowserRouter>);
 
-    expect(screen.getByText('Restoring your session…')).toBeTruthy();
+    expect(screen.getByRole('status', { name: 'Checking session' })).toBeTruthy();
     expect(screen.queryByText('Your money, connected.')).toBeNull();
 
     await waitFor(() => expect(screen.getByText('Your money, connected.')).toBeTruthy(), { timeout: 5000 });
@@ -59,7 +59,7 @@ describe('PayConnect app', () => {
     stubAuthenticatedSession();
     render(<BrowserRouter><App /></BrowserRouter>);
 
-    expect(screen.getByText('Restoring your session…')).toBeTruthy();
+    expect(screen.getByRole('status', { name: 'Checking session' })).toBeTruthy();
     expect(screen.queryByText('Your money, connected.')).toBeNull();
 
     await waitFor(() => expect(screen.getByRole('link', { name: 'Profiles' })).toBeTruthy(), { timeout: 5000 });

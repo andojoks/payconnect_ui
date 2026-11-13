@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom';
 import { api, Role, Session } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { useGlobalSearch, usePageMeta, useToast } from '../components/Shell';
+import { useGlobalSearch, usePageMeta, useToast } from '../components/layout/Shell';
 import { ChevronRight, Plus, Shield, X } from 'lucide-react';
 
 type Props = { session: Session };

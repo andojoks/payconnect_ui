@@ -1,8 +1,8 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
-import { api, Notification, ProfileSummary, Session } from '../api';
-import { cx, initials, relativeTime } from '../lib/format';
-import { ConfirmDialog } from './ConfirmDialog';
+import { api, Notification, ProfileSummary, Session } from '../../api';
+import { cx, initials, relativeTime } from '../../lib/format';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { ArrowLeftRight, Bell, Check, ChevronDown, Home, LogOut, Menu, Router, Search, Settings, Shield, TriangleAlert, UserCog, UserRound, Users, X } from 'lucide-react';
 
 export type StreamEvent = {

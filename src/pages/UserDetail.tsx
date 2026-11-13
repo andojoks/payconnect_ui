@@ -2,7 +2,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, AdminUserDetail, ProfileSummary, Role, Service, Session } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { usePageActions, usePageMeta, useToast } from '../components/Shell';
+import { usePageActions, usePageMeta, useToast } from '../components/layout/Shell';
 import { cx } from '../lib/format';
 import { ArrowLeft, Shield, Trash2, UserCog } from 'lucide-react';
 

@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom';
 import { api, AdminUser, Session } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { useGlobalSearch, usePageMeta, useToast } from '../components/Shell';
+import { useGlobalSearch, usePageMeta, useToast } from '../components/layout/Shell';
 import { cx } from '../lib/format';
 import { ChevronRight, Plus, UserCog, X } from 'lucide-react';
 

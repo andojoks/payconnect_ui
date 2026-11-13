@@ -1,8 +1,8 @@
 ﻿import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, Delivery, Intent, ProfileSummary, Service, ServiceProfile, Session } from '../api';
+import { api, ApiError, Delivery, Intent, ProfileSummary, Service, ServiceProfile, Session } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { usePageMeta, useToast } from '../components/Shell';
+import { usePageMeta, useToast } from '../components/layout/Shell';
 import { cx, formatDate, formatMoney, relativeTime, statusTone } from '../lib/format';
 import { Activity, ArrowLeft, Clock, Copy, KeyRound, Plus, Send, Settings, Trash2, TriangleAlert, Users, X } from 'lucide-react';
 
@@ -238,6 +238,7 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [profileId, setProfileId] = useState('');
+  const [intentPhone, setIntentPhone] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('XAF');
   const [reference, setReference] = useState('');
@@ -248,6 +249,7 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
   const [callbackUrl, setCallbackUrl] = useState(service.callbackUrl);
   const [active, setActive] = useState(service.active);
   const [showIntentModal, setShowIntentModal] = useState(false);
+  const [intentError, setIntentError] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
@@ -280,27 +282,49 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
   const assigned = service.profiles;
   const availableProfiles = profiles.filter((profile) => !assigned.some((item) => item.id === profile.id));
 
-  async function createIntent(event: FormEvent) {
+  async function createIntent(event: FormEvent): Promise<boolean> {
     event.preventDefault();
     setBusy('intent');
+    setIntentError('');
     try {
       await api.createServiceIntent(service.id, {
         profileId,
+        phoneNumber: intentPhone.trim(),
         amount: amount ? Number(amount) : undefined,
         currency,
         reference,
         expiresInMinutes: Number(expires) || undefined,
       });
-      setAmount('');
-      setReference('');
-      onToast({ title: 'Intent registered', body: 'Matching alerts will now be routed to this application.', tone: 'success' });
+    } catch (cause) {
+      // Surface the server response so integration failures are actionable.
+      const status = cause instanceof ApiError ? `HTTP ${cause.status}: ` : '';
+      const received = cause instanceof ApiError && cause.body.trim()
+        ? cause.body.trim()
+        : cause instanceof Error ? cause.message : 'Unable to register intent';
+      const detail = `${status}${received}`;
+      setIntentError(detail);
+      onToast({ title: 'Intent failed', body: detail, tone: 'danger' });
+      setBusy('');
+      return false;
+    }
+
+    setIntentPhone('');
+    setAmount('');
+    setReference('');
+    onToast({ title: 'Intent registered', body: 'Matching alerts will now be routed to this application.', tone: 'success' });
+    try {
       setIntents(await api.serviceIntents(service.id));
       await onRefresh();
     } catch (cause) {
-      onToast({ title: 'Intent failed', body: cause instanceof Error ? cause.message : 'Unable to register intent', tone: 'danger' });
+      onToast({
+        title: 'Intent registered',
+        body: `Intent saved, but the list could not refresh: ${cause instanceof Error ? cause.message : 'unknown error'}`,
+        tone: 'warning',
+      });
     } finally {
       setBusy('');
     }
+    return true;
   }
 
   async function cancelIntent(intent: Intent) {
@@ -466,7 +490,14 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
             <h3>Intents</h3>
             <p>Register expectations to match incoming notifications by profile, phone, and amount.</p>
           </div>
-          <button className="primary" onClick={() => setShowIntentModal(true)} disabled={assigned.length === 0}>
+          <button
+            className="primary"
+            onClick={() => {
+              setIntentError('');
+              setShowIntentModal(true);
+            }}
+            disabled={assigned.length === 0}
+          >
             <Plus size={18} /> Register intent
           </button>
         </div>
@@ -507,12 +538,11 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
                 </div>
                 <button className="icon-button" onClick={() => setShowIntentModal(false)} aria-label="Close"><X size={18} /></button>
               </div>
-              <p className="modal-copy">Match a notification by profile, sender phone, and expected amount.</p>
+              <p className="modal-copy">Match a notification by profile, payer phone, and expected amount.</p>
               <form
                 className="stack"
                 onSubmit={async (event) => {
-                  await createIntent(event);
-                  setShowIntentModal(false);
+                  if (await createIntent(event)) setShowIntentModal(false);
                 }}
               >
                 <label className="field">
@@ -521,6 +551,10 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
                     <option value="">Select profile…</option>
                     {assigned.map((profile) => <option key={profile.id} value={profile.id}>{profile.phoneNumber}</option>)}
                   </select>
+                </label>
+                <label className="field">
+                  <span>Payer phone number</span>
+                  <input value={intentPhone} onChange={(event) => setIntentPhone(event.target.value)} inputMode="tel" placeholder="Number the payment is expected from" required />
                 </label>
                 <label className="field"><span>Expected amount</span><input type="number" value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" min="0" step="any" placeholder="Optional" /></label>
                 <label className="field">
@@ -531,9 +565,15 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
                 </label>
                 <label className="field"><span>Reference</span><input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Order reference" /></label>
                 <label className="field"><span>Expires in (minutes)</span><input value={expires} onChange={(event) => setExpires(event.target.value)} inputMode="numeric" /></label>
+                {intentError && (
+                  <div className="error" role="alert">
+                    <strong>Intent POST failed — server response</strong>
+                    <pre style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12 }}>{intentError}</pre>
+                  </div>
+                )}
                 <div className="modal-actions">
                   <button type="button" className="ghost" onClick={() => setShowIntentModal(false)}>Cancel</button>
-                  <button className="primary" disabled={busy === 'intent' || !profileId}><Send size={18} /> {busy === 'intent' ? 'Registering…' : 'Register intent'}</button>
+                  <button className="primary" disabled={busy === 'intent' || !profileId || !intentPhone.trim()}><Send size={18} /> {busy === 'intent' ? 'Registering…' : 'Register intent'}</button>
                 </div>
               </form>
             </section>

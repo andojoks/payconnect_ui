@@ -1,9 +1,9 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { api, Session } from './api';
-import { Shell } from './components/Shell';
+import { Shell } from './components/layout/Shell';
 import { ProfilesPage } from './pages/Profiles';
-import { ProfileLayout } from './pages/ProfileLayout';
+import { ProfileLayout } from './components/layout/ProfileLayout';
 import { ProfileOverviewPage } from './pages/ProfileOverview';
 import { ProfileTransactionsPage } from './pages/ProfileTransactions';
 import { ProfileAlertsPage } from './pages/ProfileAlerts';
@@ -19,13 +19,8 @@ import { Eye, EyeOff } from 'lucide-react';
 
 function SessionLoading() {
   return (
-    <main className="auth" aria-busy="true" aria-live="polite">
-      <section className="auth-card session-loading">
-        <span className="brand-mark">P</span>
-        <span className="spinner" />
-        <h1>Restoring your session…</h1>
-        <p>Checking your PayConnect session before loading the workspace.</p>
-      </section>
+    <main className="auth" aria-busy="true">
+      <span className="spinner session-spinner" role="status" aria-label="Checking session" />
     </main>
   );
 }

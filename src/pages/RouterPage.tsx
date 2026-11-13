@@ -2,7 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { api, getApiBaseURL, Service, Session } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { useGlobalSearch, usePageMeta } from '../components/Shell';
+import { useGlobalSearch, usePageMeta } from '../components/layout/Shell';
 import { cx, relativeTime } from '../lib/format';
 import { ChevronRight, Copy, Plus, Router, X } from 'lucide-react';
 
@@ -424,6 +424,7 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
         <div className="section-head"><div><h4>Body</h4></div></div>
         <pre className="code-block">{`{
   "profileId": "connected-profile-uuid",
+  "phoneNumber": "+2376XXXXXXXX",
   "amount": 5000,
   "currency": "XAF",
   "reference": "INV-1001",
@@ -431,6 +432,7 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
 }`}</pre>
         <div className="details">
           <div><dt>profileId</dt><dd>Required; must be attached to this route (service credentials) or accessible to your session (dashboard).</dd></div>
+          <div><dt>phoneNumber</dt><dd>Required; the payer phone number the payment is expected from.</dd></div>
           <div><dt>amount</dt><dd>Optional expected amount; matching tolerance is 0.01. Omit to match any amount.</dd></div>
           <div><dt>currency</dt><dd>Defaults to <code>XAF</code>.</dd></div>
           <div><dt>reference</dt><dd>Your order or invoice reference; echoed back in the callback.</dd></div>
@@ -464,6 +466,7 @@ const res = await fetch(\`${apiBase}/api/v1/services/\${SERVICE_ID}/intents\`, {
   },
   body: JSON.stringify({
     profileId: 'connected-profile-uuid',
+    phoneNumber: '+2376XXXXXXXX',
     amount: 5000,
     currency: 'XAF',
     reference: 'INV-1001',
@@ -486,6 +489,7 @@ headers = {
 }
 payload = {
     'profileId': 'connected-profile-uuid',
+    'phoneNumber': '+2376XXXXXXXX',
     'amount': 5000,
     'currency': 'XAF',
     'reference': 'INV-1001',
@@ -506,6 +510,7 @@ HttpRequest request = HttpRequest.newBuilder()
     .POST(HttpRequest.BodyPublishers.ofString("""
         {
           "profileId": "connected-profile-uuid",
+          "phoneNumber": "+2376XXXXXXXX",
           "amount": 5000,
           "currency": "XAF",
           "reference": "INV-1001",
@@ -718,7 +723,7 @@ public class Callback {
 
         <div className="details">
           <div><dt>idempotencyKey</dt><dd>Required; deduplicates retries for this route.</dd></div>
-          <div><dt>phoneNumber</dt><dd>Payer number on the attached profile.</dd></div>
+          <div><dt>phoneNumber</dt><dd>Phone number of the attached profile that received the payment.</dd></div>
           <div><dt>amount</dt><dd>Received amount; must be greater than zero.</dd></div>
           <div><dt>currency</dt><dd>Defaults to <code>XAF</code>.</dd></div>
           <div><dt>reference</dt><dd>Echoed back in the delivered event.</dd></div>

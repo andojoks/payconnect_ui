@@ -194,7 +194,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // http.Error writes plain text.
     }
-    throw new ApiError(message || `Request failed (${response.status})`, response.status);
+    throw new ApiError(message || `Request failed (${response.status})`, response.status, text);
   }
   if (response.status === 204) return undefined as T;
   const text = await response.text();
@@ -203,7 +203,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(message: string, readonly status: number, readonly body = '') {
     super(message);
     this.name = 'ApiError';
   }
@@ -295,7 +295,7 @@ export const api = {
   serviceIntents: (serviceId: string) => request<Intent[]>(`/api/v1/services/${serviceId}/intents`),
   createServiceIntent: (
     serviceId: string,
-    values: { profileId: string; phoneNumber?: string; amount?: number; currency?: string; reference?: string; expiresInMinutes?: number },
+    values: { profileId: string; phoneNumber: string; amount?: number; currency?: string; reference?: string; expiresInMinutes?: number },
   ) => request<{ id: string; status: string }>(`/api/v1/services/${serviceId}/intents`, { method: 'POST', body: JSON.stringify(values) }),
   cancelServiceIntent: (serviceId: string, intentId: string) =>
     request<void>(`/api/v1/services/${serviceId}/intents/${intentId}`, { method: 'DELETE' }),

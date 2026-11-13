@@ -1,5 +1,5 @@
 import { api, Notification, ProfileDetail } from '../api';
-import type { StreamEvent } from '../components/Shell';
+import type { StreamEvent } from '../components/layout/Shell';
 
 export const alertFetchPageSize = 500;
 export const alertFetchMax = 5000;

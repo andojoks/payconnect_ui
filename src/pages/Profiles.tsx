@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, ProfileSummary } from '../api';
 import { ProfileAuthModal } from '../components/ProfileAuthModal';
-import { useGlobalSearch, usePageMeta } from '../components/Shell';
+import { useGlobalSearch, usePageMeta } from '../components/layout/Shell';
 import { cx, formatMoney, providerLabel, relativeTime, statusTone } from '../lib/format';
 import { ChevronRight, Plus, TriangleAlert, Users, Wallet, Wifi } from 'lucide-react';
 

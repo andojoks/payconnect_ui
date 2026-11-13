@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, Notification, Transaction } from '../api';
 import { TransactionDetailDialog } from '../components/Transaction/TransactionDetailDialog';
-import { usePageMeta } from '../components/Shell';
+import { usePageMeta } from '../components/layout/Shell';
 import { cx, formatDate, formatMoney, relativeTime, statusTone } from '../lib/format';
 import { eventNotification, mergeById } from './profileData';
-import { useProfileContext, useProfileEvent } from './ProfileLayout';
+import { useProfileContext, useProfileEvent } from '../components/layout/ProfileLayout';
 import { ArrowLeftRight, ChevronRight, Clock, Download, Send, Smartphone, TriangleAlert } from 'lucide-react';
 
 export function ProfileOverviewPage() {

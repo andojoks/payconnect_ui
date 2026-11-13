@@ -1,6 +1,6 @@
-import { usePageMeta } from '../components/Shell';
+import { usePageMeta } from '../components/layout/Shell';
 import { cx, formatDate, providerLabel, statusTone } from '../lib/format';
-import { useProfileContext } from './ProfileLayout';
+import { useProfileContext } from '../components/layout/ProfileLayout';
 
 export function ProfileAccountPage() {
   usePageMeta({ title: 'Profile account' });

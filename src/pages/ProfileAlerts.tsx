@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, Notification } from '../api';
-import { useGlobalSearch, usePageMeta } from '../components/Shell';
+import { useGlobalSearch, usePageMeta } from '../components/layout/Shell';
 import { cx, formatDate, relativeTime, statusTone } from '../lib/format';
 import { eventNotification, fetchAllNotifications, mergeById } from './profileData';
-import { useProfileContext, useProfileEvent } from './ProfileLayout';
+import { useProfileContext, useProfileEvent } from '../components/layout/ProfileLayout';
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export function ProfileAlertsPage() {

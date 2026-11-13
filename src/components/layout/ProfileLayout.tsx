@@ -1,9 +1,9 @@
 import { createContext, Dispatch, SetStateAction, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useParams } from 'react-router-dom';
-import { api, ApiError, ProfileDetail, Transaction } from '../api';
-import { ReauthModal } from '../components/ReauthModal';
-import { StreamEvent, useEventStream, usePageActions, useToast } from '../components/Shell';
-import { relativeTime } from '../lib/format';
+import { api, ApiError, ProfileDetail, Transaction } from '../../api';
+import { ReauthModal } from '../ReauthModal';
+import { StreamEvent, useEventStream, usePageActions, useToast } from './Shell';
+import { relativeTime } from '../../lib/format';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 
 type ProfileContextValue = {

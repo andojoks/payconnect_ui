@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, Transaction } from '../api';
 import { TransactionDetailDialog } from '../components/Transaction/TransactionDetailDialog';
-import { useGlobalSearch, usePageMeta } from '../components/Shell';
+import { useGlobalSearch, usePageMeta } from '../components/layout/Shell';
 import { cx, formatDate, formatMoney, relativeTime, statusTone } from '../lib/format';
-import { useProfileContext, useProfileEvent } from './ProfileLayout';
+import { useProfileContext, useProfileEvent } from '../components/layout/ProfileLayout';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export function ProfileTransactionsPage() {
