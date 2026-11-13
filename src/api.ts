@@ -173,19 +173,14 @@ export type RoleDetail = {
 };
 export type ProfileAccess = { userId: string; profileId: string };
 
-const configuredApiBase = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '');
-
-// Single API origin for every request and for the integration guide. Production
-// builds supply VITE_API_URL; if it is missing, fall back to same-origin rather
-// than baking localhost into the deployed bundle. Only the dev server defaults
-// to the local API.
-export const API_BASE_URL = configuredApiBase
-  || (import.meta.env.DEV ? 'http://localhost:8080' : '');
-
-const API = API_BASE_URL;
+// The dashboard and the integration guide both read the configured API origin
+// directly. Local development falls back to the API's default port.
+export function getApiBaseURL(): string {
+  return import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API}${path}`, {
+  const response = await fetch(`${getApiBaseURL()}${path}`, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     ...init,
@@ -224,8 +219,10 @@ function queryString(values: Record<string, string | number | boolean | undefine
 }
 
 export const api = {
-  baseUrl: API,
-  streamUrl: (path: string) => `${API}${path}`,
+  get baseUrl() {
+    return getApiBaseURL();
+  },
+  streamUrl: (path: string) => `${getApiBaseURL()}${path}`,
 
   login: (email: string, password: string) =>
     request('/api/v1/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
