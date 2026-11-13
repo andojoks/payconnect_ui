@@ -48,5 +48,7 @@ describe('Router integration guide', () => {
     expect(text).toContain('There is no PayConnect');
     expect(text).toContain('Receive callbacks (PayConnect');
     expect(text).toContain('X-PayConnect-Secret');
+    expect(text).toContain('X-PayConnect-Signature-V2');
+    expect(text).toContain('parsedFinancialTransactionID');
   });
 });

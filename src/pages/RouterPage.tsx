@@ -372,7 +372,7 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
         <div className="details">
           <div><dt>API base URL</dt><dd className="mono">{apiBase}</dd></div>
           <div><dt>Inbound auth</dt><dd><code>X-PayConnect-Service</code> (route/service ID) and <code>X-PayConnect-Secret</code> (signing secret). No session cookie on server-to-server calls.</dd></div>
-          <div><dt>Outbound auth</dt><dd>HMAC-SHA256 signature in <code>X-PayConnect-Signature</code>. Your callback URL must be absolute HTTPS.</dd></div>
+          <div><dt>Outbound auth</dt><dd>HMAC-SHA256 signature in <code>X-PayConnect-Signature-V2</code> over a fixed field array. Your callback URL must be absolute HTTPS.</dd></div>
           <div><dt>Discovery</dt><dd><code>GET {apiBase}/api/v1/meta</code> returns every URL below from the running router.</dd></div>
           <div><dt>Encoding</dt><dd>JSON request/response bodies.</dd></div>
         </div>
@@ -549,10 +549,41 @@ GET ${apiBase}/api/v1/services/{serviceId}/deliveries`}</pre>
             <tbody>
               <tr><td><code>X-PayConnect-Timestamp</code></td><td>Unix seconds when the callback was sent (&plusmn;5 min tolerance).</td></tr>
               <tr><td><code>X-PayConnect-Idempotency-Key</code></td><td>Unique key per delivery; retry-safe deduplication.</td></tr>
-              <tr><td><code>X-PayConnect-Signature</code></td><td><code>{'sha256='}</code> HMAC-SHA256 hex over the exact bytes <code>{'{timestamp}.{idempotencyKey}.{rawBody}'}</code>, keyed with the base64url service secret shown when the route was created. Use the raw request body, not a re-serialized JSON object.</td></tr>
+              <tr><td><code>X-PayConnect-Signature-Version</code></td><td><code>2</code> when the field-based signature is present.</td></tr>
+              <tr><td><code>X-PayConnect-Signature-V2</code></td><td><code>{'sha256='}</code> HMAC-SHA256 hex over <code>{'{timestamp}.{idempotencyKey}.{canonicalFieldArray}'}</code>, keyed with the base64url service secret shown when the route was created. Build <code>canonicalFieldArray</code> from the parsed JSON body using the fixed field order below. Whitespace and key order do not matter.</td></tr>
+              <tr><td><code>X-PayConnect-Signature</code></td><td>Legacy raw-body signature retained for older integrations. New integrations should verify <code>X-PayConnect-Signature-V2</code>.</td></tr>
             </tbody>
           </table>
         </div>
+
+        <div className="section-head"><div><h4>Signed fields (V2)</h4></div></div>
+        <pre className="code-block">{`[
+  body.event,
+  body.intentId,
+  body.profileId,
+  body.phoneNumber,
+  body.amount,
+  body.currency,
+  body.reference,
+  body.idempotencyKey,
+  body.sourceServiceId,
+  body.recipientName,
+  body.financialTransactionId,
+  body.transactionId,
+  body.direction,
+  body.createdAt,
+  body.matchedAt,
+  body.notification?.id,
+  body.notification?.title,
+  body.notification?.receivedAt,
+  body.notification?.parsedDirection,
+  body.notification?.parsedAmount,
+  body.notification?.parsedCurrency,
+  body.notification?.parsedRecipient,
+  body.notification?.parsedPhone,
+  body.notification?.parsedFinancialTransactionID
+]`}</pre>
+        <p className="muted small-text">Missing values become <code>null</code>. The signed message is <code>{'{timestamp}.{idempotencyKey}.{JSON.stringify(array)}'}</code>.</p>
 
         <div className="section-head"><div><h4>Body</h4></div></div>
         <pre className="code-block">{`{
@@ -584,16 +615,43 @@ GET ${apiBase}/api/v1/services/{serviceId}/deliveries`}</pre>
           {`const crypto = require('crypto');
 const express = require('express');
 const app = express();
+app.use(express.json());
 
-function verifySignature(secret, timestamp, idempotencyKey, rawBody, signature) {
+function canonicalFields(body) {
+  return [
+    body.event,
+    body.intentId,
+    body.profileId,
+    body.phoneNumber,
+    body.amount,
+    body.currency,
+    body.reference,
+    body.idempotencyKey,
+    body.sourceServiceId,
+    body.recipientName,
+    body.financialTransactionId,
+    body.transactionId,
+    body.direction,
+    body.createdAt,
+    body.matchedAt,
+    body.notification?.id,
+    body.notification?.title,
+    body.notification?.receivedAt,
+    body.notification?.parsedDirection,
+    body.notification?.parsedAmount,
+    body.notification?.parsedCurrency,
+    body.notification?.parsedRecipient,
+    body.notification?.parsedPhone,
+    body.notification?.parsedFinancialTransactionID,
+  ].map((value) => value ?? null);
+}
+
+function verifySignature(secret, timestamp, idempotencyKey, body, signature) {
   const now = Math.floor(Date.now() / 1000);
   if (!timestamp || Math.abs(now - Number(timestamp)) > 300) return false;
-  if (!signature || !idempotencyKey || !Buffer.isBuffer(rawBody)) return false;
+  if (!signature || !idempotencyKey) return false;
 
-  const message = Buffer.concat([
-    Buffer.from(String(timestamp) + '.' + idempotencyKey + '.', 'utf8'),
-    rawBody,
-  ]);
+  const message = String(timestamp) + '.' + idempotencyKey + '.' + JSON.stringify(canonicalFields(body));
   const expected = 'sha256=' + crypto
     .createHmac('sha256', secret)
     .update(message)
@@ -604,35 +662,58 @@ function verifySignature(secret, timestamp, idempotencyKey, rawBody, signature) 
   return received.length === wanted.length && crypto.timingSafeEqual(received, wanted);
 }
 
-// Keep the raw bytes: do not put express.json() before this route.
-app.post(
-  '/payconnect/callback',
-  express.raw({ type: 'application/json' }),
-  (req, res) => {
-    const ok = verifySignature(
-      process.env.PAYCONNECT_SECRET, // base64url secret shown in the dashboard
-      req.get('X-PayConnect-Timestamp'),
-      req.get('X-PayConnect-Idempotency-Key'),
-      req.body, // Buffer with the exact bytes PayConnect sent
-      req.get('X-PayConnect-Signature'),
-    );
-    if (!ok) return res.status(401).send('invalid signature');
-
-    const event = JSON.parse(req.body.toString('utf8'));
-    // process event
-    res.status(200).send('ok');
-  },
-);`}
+app.post('/payconnect/callback', (req, res) => {
+  const ok = verifySignature(
+    process.env.PAYCONNECT_SECRET, // base64url secret shown in the dashboard
+    req.get('X-PayConnect-Timestamp'),
+    req.get('X-PayConnect-Idempotency-Key'),
+    req.body, // parsed JSON object
+    req.get('X-PayConnect-Signature-V2'),
+  );
+  if (!ok) return res.status(401).send('invalid signature');
+  // process req.body
+  res.status(200).send('ok');
+});`}
         </CodeBlock>
         <CodeBlock lang="Python" active={sigLang}>
-          {`import hmac, hashlib, time
+          {`import hmac, hashlib, json, time
 from flask import request, abort
 
 SECRET = b'your-service-secret'  # base64url secret shown in the dashboard
 
-def verify(secret, timestamp, idempotency_key, raw_body, signature):
-    message = timestamp.encode() + b'.' + idempotency_key.encode() + b'.' + raw_body
-    expected = 'sha256=' + hmac.new(secret, message, hashlib.sha256).hexdigest()
+def canonical_fields(body):
+    notification = body.get('notification') or {}
+    values = [
+        body.get('event'),
+        body.get('intentId'),
+        body.get('profileId'),
+        body.get('phoneNumber'),
+        body.get('amount'),
+        body.get('currency'),
+        body.get('reference'),
+        body.get('idempotencyKey'),
+        body.get('sourceServiceId'),
+        body.get('recipientName'),
+        body.get('financialTransactionId'),
+        body.get('transactionId'),
+        body.get('direction'),
+        body.get('createdAt'),
+        body.get('matchedAt'),
+        notification.get('id'),
+        notification.get('title'),
+        notification.get('receivedAt'),
+        notification.get('parsedDirection'),
+        notification.get('parsedAmount'),
+        notification.get('parsedCurrency'),
+        notification.get('parsedRecipient'),
+        notification.get('parsedPhone'),
+        notification.get('parsedFinancialTransactionID'),
+    ]
+    return json.dumps(values, ensure_ascii=False, separators=(',', ':'))
+
+def verify(secret, timestamp, idempotency_key, body, signature):
+    message = f"{timestamp}.{idempotency_key}.{canonical_fields(body)}"
+    expected = 'sha256=' + hmac.new(secret, message.encode(), hashlib.sha256).hexdigest()
     now = int(time.time())
     if abs(now - int(timestamp)) > 300:
         raise ValueError('stale timestamp')
@@ -641,38 +722,81 @@ def verify(secret, timestamp, idempotency_key, raw_body, signature):
 @app.route('/payconnect/callback', methods=['POST'])
 def callback():
     try:
+        body = request.get_json()
         ok = verify(
             SECRET,
             request.headers.get('X-PayConnect-Timestamp', ''),
             request.headers.get('X-PayConnect-Idempotency-Key', ''),
-            request.get_data(cache=True),  # exact raw body bytes
-            request.headers.get('X-PayConnect-Signature', ''),
+            body,
+            request.headers.get('X-PayConnect-Signature-V2', ''),
         )
         if not ok:
             abort(401, 'invalid signature')
-        event = request.get_json()
         return 'ok', 200
     except Exception as err:
         return str(err), 400`}
         </CodeBlock>
         <CodeBlock lang="Java" active={sigLang}>
-          {`import javax.crypto.Mac;
+          {`import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 public class Callback {
   static final byte[] SECRET = "your-service-secret".getBytes(StandardCharsets.UTF_8);
+  static final ObjectMapper MAPPER = new ObjectMapper();
+
+  static byte[] canonicalFields(JsonNode body) throws Exception {
+    ArrayNode values = MAPPER.createArrayNode();
+    addField(values, body.get("event"));
+    addField(values, body.get("intentId"));
+    addField(values, body.get("profileId"));
+    addField(values, body.get("phoneNumber"));
+    addField(values, body.get("amount"));
+    addField(values, body.get("currency"));
+    addField(values, body.get("reference"));
+    addField(values, body.get("idempotencyKey"));
+    addField(values, body.get("sourceServiceId"));
+    addField(values, body.get("recipientName"));
+    addField(values, body.get("financialTransactionId"));
+    addField(values, body.get("transactionId"));
+    addField(values, body.get("direction"));
+    addField(values, body.get("createdAt"));
+    addField(values, body.get("matchedAt"));
+
+    JsonNode notification = body.path("notification");
+    addField(values, notification.get("id"));
+    addField(values, notification.get("title"));
+    addField(values, notification.get("receivedAt"));
+    addField(values, notification.get("parsedDirection"));
+    addField(values, notification.get("parsedAmount"));
+    addField(values, notification.get("parsedCurrency"));
+    addField(values, notification.get("parsedRecipient"));
+    addField(values, notification.get("parsedPhone"));
+    addField(values, notification.get("parsedFinancialTransactionID"));
+    return MAPPER.writeValueAsBytes(values);
+  }
+
+  static void addField(ArrayNode values, JsonNode value) {
+    if (value == null || value.isNull() || value.isMissingNode()) {
+      values.addNull();
+    } else {
+      values.add(value);
+    }
+  }
 
   static boolean verify(long timestamp, String idempotencyKey,
-                        byte[] rawBody, String signature) throws Exception {
+                        JsonNode body, String signature) throws Exception {
     long now = System.currentTimeMillis() / 1000;
     if (signature == null || Math.abs(now - timestamp) > 300) return false;
 
     Mac mac = Mac.getInstance("HmacSHA256");
     mac.init(new SecretKeySpec(SECRET, "HmacSHA256"));
     mac.update((timestamp + "." + idempotencyKey + ".").getBytes(StandardCharsets.UTF_8));
-    mac.update(rawBody);
+    mac.update(canonicalFields(body));
 
     String expected = "sha256=" + bytesToHex(mac.doFinal());
     return MessageDigest.isEqual(
@@ -689,7 +813,7 @@ public class Callback {
 }`}
         </CodeBlock>
 
-        <p className="muted small-text">Capture the raw request body before parsing JSON. In Express, mount this route with <code>express.raw</code> before any <code>express.json()</code> middleware; in Flask, use <code>request.get_data()</code>. The HMAC key is the base64url secret exactly as shown in the dashboard.</p>
+        <p className="muted small-text">Parse the JSON body and build the same field array before verifying. The signature covers the values, not the original JSON formatting, so whitespace and object key order do not matter. Missing values become <code>null</code>. Only the listed fields are authenticated; ignore any callback fields outside this list. The HMAC key is the base64url secret exactly as shown in the dashboard; do not decode it. The legacy <code>X-PayConnect-Signature</code> raw-body header remains available for older integrations.</p>
 
         <div className="section-head"><div><h4>Respond</h4></div></div>
         <div className="table-wrap">

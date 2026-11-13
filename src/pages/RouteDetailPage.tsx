@@ -437,8 +437,8 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
             </div>
           </section>
           <section className="card inner-card">
-            <div className="card-head"><div><h3>Callback contract</h3><p>Authenticate with the service secret and verify the HMAC over the raw request body.</p></div></div>
-            <pre className="code-block">{`POST ${service.callbackUrl}\nX-PayConnect-Signature: sha256=<hmac>\nX-PayConnect-Timestamp: <unix>\nX-PayConnect-Idempotency-Key: <key>\n\n{"event":"collection.matched","intentId":"...","phoneNumber":"...","amount":5000,"currency":"XAF","transactionId":"..."}`}</pre>
+            <div className="card-head"><div><h3>Callback contract</h3><p>Authenticate with the service secret and verify the field-based HMAC signature.</p></div></div>
+            <pre className="code-block">{`POST ${service.callbackUrl}\nX-PayConnect-Signature-V2: sha256=<hmac>\nX-PayConnect-Signature-Version: 2\nX-PayConnect-Timestamp: <unix>\nX-PayConnect-Idempotency-Key: <key>\n\n{"event":"collection.matched","intentId":"...","phoneNumber":"...","amount":5000,"currency":"XAF","transactionId":"..."}`}</pre>
           </section>
         </div>
 
