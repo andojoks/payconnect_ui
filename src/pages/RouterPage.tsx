@@ -1,6 +1,6 @@
 ﻿import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, Service, Session } from '../api';
+import { api, API_BASE_URL, Service, Session } from '../api';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useGlobalSearch, usePageMeta } from '../components/Shell';
 import { cx, relativeTime } from '../lib/format';
@@ -356,10 +356,25 @@ export function RouterPage({ session }: Props) {
 }
 
 function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { sigLang: string; setSigLang: (s: string) => void; intentLang: string; setIntentLang: (s: string) => void }) {
-  // Single origin for every fully-qualified URL shown below. VITE_API_URL must
-  // be the deployed API origin (for example https://api.payconnect.example);
-  // the localhost fallback is only for local development.
-  const apiBase = (import.meta.env.VITE_API_URL ?? 'http://localhost:8080').replace(/\/+$/, '');
+  // Every fully-qualified URL below comes from the same API origin the
+  // dashboard uses (VITE_API_URL in production). The runtime contract is the
+  // final authority, so prefer the baseUrl reported by GET /api/v1/meta.
+  const [apiBase, setApiBase] = useState(API_BASE_URL);
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE_URL}/api/v1/meta`, { credentials: 'include' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((meta: { baseUrl?: string } | null) => {
+        const reported = meta?.baseUrl?.trim().replace(/\/+$/, '');
+        if (active && reported) setApiBase(reported);
+      })
+      .catch(() => {
+        // Keep the configured origin if discovery is unavailable.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   return (
     <div className="stack-lg">
       <div className="page-toolbar">

@@ -173,7 +173,16 @@ export type RoleDetail = {
 };
 export type ProfileAccess = { userId: string; profileId: string };
 
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+const configuredApiBase = (import.meta.env.VITE_API_URL ?? '').trim().replace(/\/+$/, '');
+
+// Single API origin for every request and for the integration guide. Production
+// builds supply VITE_API_URL; if it is missing, fall back to same-origin rather
+// than baking localhost into the deployed bundle. Only the dev server defaults
+// to the local API.
+export const API_BASE_URL = configuredApiBase
+  || (import.meta.env.DEV ? 'http://localhost:8080' : '');
+
+const API = API_BASE_URL;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API}${path}`, {

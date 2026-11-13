@@ -35,6 +35,33 @@ describe('Router integration guide', () => {
     expect(text).not.toContain('http://localhost:8080/api/v1/collect');
   });
 
+  it('uses the base URL reported by GET /api/v1/meta', async () => {
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/v1/meta')) {
+        return new Response(JSON.stringify({ baseUrl: 'https://api.payconnect.ktorganicshop.com' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('[]', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    render(
+      <MemoryRouter>
+        <RouterPage session={{ authenticated: true, isRoot: true }} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByText('How to integrate'));
+
+    const matches = await screen.findAllByText(/https:\/\/api\.payconnect\.ktorganicshop\.com\/api\/v1\/collect/);
+    expect(matches.length).toBeGreaterThan(0);
+  });
+
   it('explains that callbacks are outbound to the registered URL', () => {
     render(
       <MemoryRouter>
