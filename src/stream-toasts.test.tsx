@@ -38,7 +38,7 @@ const detail = {
 /**
  * Stand-in for the browser's EventSource. The app opens one connection for the
  * global stream (Shell) and another for the profile-scoped stream
- * (ProfileDetail), exactly as it does in production, so a broadcast has to be
+ * (ProfileLayout), exactly as it does in production, so a broadcast has to be
  * delivered to every open connection the way the backend fan-out does.
  */
 class FakeEventSource {
@@ -110,12 +110,16 @@ async function renderProfileWorkspace() {
   // Profile is only available once the sign-in surface is gone, the workspace
   // finished loading, and the detail request resolved. Assert positively too:
   // an empty body would satisfy every "is null" check above.
-  await waitFor(() => {
-    expect(screen.queryByText('Your money, connected.')).toBeNull();
-    expect(screen.queryByText('Loading profile workspace…')).toBeNull();
-    expect(screen.queryByText('Profile unavailable')).toBeNull();
-    expect(screen.getByText('Recent transactions')).toBeTruthy();
-  });
+  await waitFor(
+    () => {
+      expect(screen.queryByText('Your money, connected.')).toBeNull();
+      expect(screen.queryByText('Loading profile workspace…')).toBeNull();
+      expect(screen.queryByText('Profile unavailable')).toBeNull();
+      expect(screen.getByText('Recent transactions')).toBeTruthy();
+      expect(FakeEventSource.instances.filter((source) => !source.closed)).toHaveLength(2);
+    },
+    { timeout: 5000 },
+  );
 }
 
 function toasts() {
@@ -194,6 +198,6 @@ describe('stream driven toasts', () => {
     // The payment alert comes from the notification event, so the transaction
     // event must only refresh the table, never announce a second time.
     expect(toasts()).toHaveLength(0);
-    expect(screen.getByText('Payment')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Payment')).toBeTruthy(), { timeout: 5000 });
   });
 });

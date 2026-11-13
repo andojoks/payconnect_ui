@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { api, Notification, ProfileSummary, Session } from '../api';
 import { cx, initials, relativeTime } from '../lib/format';
 import { ConfirmDialog } from './ConfirmDialog';
-import { ArrowLeftRight, Bell, Check, ChevronDown, Home, LogOut, Menu, Router, Search, Shield, TriangleAlert, UserCog, Users, Wifi, X } from 'lucide-react';
+import { ArrowLeftRight, Bell, Check, ChevronDown, Home, LogOut, Menu, Router, Search, Settings, Shield, TriangleAlert, UserCog, UserRound, Users, X } from 'lucide-react';
 
 export type StreamEvent = {
   type: string;
@@ -122,7 +122,7 @@ function routeMeta(pathname: string): PageMeta {
     if (tail === 'transactions') return { title: 'Profile transactions' };
     if (tail === 'alerts') return { title: 'Profile alerts' };
     if (tail === 'account') return { title: 'Profile account' };
-    if (tail === 'connection') return { title: 'Profile connection' };
+    if (tail === 'configuration' || tail === 'connection') return { title: 'Profile configuration' };
     return { title: 'Profile overview' };
   }
   if (pathname.startsWith('/router/')) return { title: 'Route details' };
@@ -240,7 +240,7 @@ export function Shell({ session, onLogout, children }: Props) {
         title: 'FCM needs attention',
         body: String(event.data?.error ?? 'The push listener could not authenticate.'),
         tone: 'danger',
-        href: event.profileId ? `/profiles/${event.profileId}/connection` : undefined,
+        href: event.profileId ? `/profiles/${event.profileId}/configuration` : undefined,
       });
     }
     if (event.type === 'sync' && event.data?.status === 'error') {
@@ -263,9 +263,9 @@ export function Shell({ session, onLogout, children }: Props) {
     const segments = location.pathname.split('/').filter(Boolean);
     if (segments[0] !== 'profiles' || segments.length < 2 || !segments[1]) return null;
     const id = segments[1];
-    const rawTab = segments[2];
-    const tab = rawTab && ['overview', 'transactions', 'alerts', 'account', 'connection'].includes(rawTab) ? rawTab : 'overview';
-    return { id, tab };
+    const rawPage = segments[2];
+    const page = rawPage && ['transactions', 'alerts', 'account', 'configuration'].includes(rawPage) ? rawPage : 'overview';
+    return { id, page };
   }, [location.pathname]);
 
   const searchValue = useMemo(() => ({ query, setQuery }), [query]);
@@ -344,14 +344,24 @@ export function Shell({ session, onLogout, children }: Props) {
                       <span className="nav-label">Alerts</span>
                     </NavLink>
                     <NavLink
-                      to={`/profiles/${profileScoped.id}/connection`}
+                      to={`/profiles/${profileScoped.id}/account`}
                       className={({ isActive }) => cx('nav-item', isActive && 'active')}
                       onClick={closeMobile}
-                      onMouseEnter={(e) => showTip(e, 'Connection')}
+                      onMouseEnter={(e) => showTip(e, 'Account')}
                       onMouseLeave={hideTip}
                     >
-                      <Wifi size={18} />
-                      <span className="nav-label">Connection</span>
+                      <UserRound size={18} />
+                      <span className="nav-label">Account</span>
+                    </NavLink>
+                    <NavLink
+                      to={`/profiles/${profileScoped.id}/configuration`}
+                      className={({ isActive }) => cx('nav-item', isActive && 'active')}
+                      onClick={closeMobile}
+                      onMouseEnter={(e) => showTip(e, 'Configuration')}
+                      onMouseLeave={hideTip}
+                    >
+                      <Settings size={18} />
+                      <span className="nav-label">Configuration</span>
                     </NavLink>
                   </>
                 ) : (

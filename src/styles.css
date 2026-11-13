@@ -87,6 +87,12 @@ form { display: grid; gap: 18px; margin-top: 30px; }
 /* ---------- Auth ---------- */
 .auth { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at top right, #123f54, #07111f 55%); }
 .auth-card { width: min(100%, 430px); padding: 42px; border: 1px solid #264052; border-radius: 24px; background: #0c1c2b; box-shadow: 0 24px 80px #0005; }
+.session-loading { display: grid; justify-items: center; gap: 16px; text-align: center; }
+.session-loading h1 { font-size: clamp(1.6rem, 3vw, 2rem); }
+.session-loading p { max-width: 320px; }
+.input-with-action { position: relative; display: flex; align-items: center; }
+.input-with-action input { padding-right: 48px; }
+.input-with-action .password-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 34px; height: 34px; }
 
 /* ---------- App shell: sidebar + appbar ---------- */
 .app-shell { display: flex; min-height: 100vh; background: var(--bg); }
