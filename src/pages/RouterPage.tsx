@@ -79,7 +79,7 @@ function SecretModal({ service, onClose }: { service: Service; onClose: () => vo
           <button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
         <p className="modal-copy">
-          Store this secret now. It signs every callback with HMAC-SHA256 and will not be shown again. Use it as the <code>X-PayConnect-Secret</code> value when creating intents or posting collections.
+          Store this secret now. It will not be shown again. Use the exact string as the <code>X-PayConnect-Secret</code> value and as the HMAC-SHA256 key when verifying callback signatures.
         </p>
         <div className="secret-box">
           <code>{secret}</code>
@@ -549,7 +549,7 @@ GET ${apiBase}/api/v1/services/{serviceId}/deliveries`}</pre>
             <tbody>
               <tr><td><code>X-PayConnect-Timestamp</code></td><td>Unix seconds when the callback was sent (&plusmn;5 min tolerance).</td></tr>
               <tr><td><code>X-PayConnect-Idempotency-Key</code></td><td>Unique key per delivery; retry-safe deduplication.</td></tr>
-              <tr><td><code>X-PayConnect-Signature</code></td><td><code>{'sha256='}</code> HMAC-SHA256 hex of <code>{'{timestamp}.{idempotencyKey}.{body}'}</code> using your service secret.</td></tr>
+              <tr><td><code>X-PayConnect-Signature</code></td><td><code>{'sha256='}</code> HMAC-SHA256 hex over the exact bytes <code>{'{timestamp}.{idempotencyKey}.{rawBody}'}</code>, keyed with the base64url service secret shown when the route was created. Use the raw request body, not a re-serialized JSON object.</td></tr>
             </tbody>
           </table>
         </div>
@@ -582,44 +582,56 @@ GET ${apiBase}/api/v1/services/{serviceId}/deliveries`}</pre>
         </div>
         <CodeBlock lang="JavaScript" active={sigLang}>
           {`const crypto = require('crypto');
+const express = require('express');
+const app = express();
 
-function verify(secret, timestamp, idempotencyKey, rawBody, signature) {
-  const message = \`\${timestamp}.\${idempotencyKey}.\${rawBody}\`;
+function verifySignature(secret, timestamp, idempotencyKey, rawBody, signature) {
+  const now = Math.floor(Date.now() / 1000);
+  if (!timestamp || Math.abs(now - Number(timestamp)) > 300) return false;
+  if (!signature || !idempotencyKey || !Buffer.isBuffer(rawBody)) return false;
+
+  const message = Buffer.concat([
+    Buffer.from(String(timestamp) + '.' + idempotencyKey + '.', 'utf8'),
+    rawBody,
+  ]);
   const expected = 'sha256=' + crypto
     .createHmac('sha256', secret)
     .update(message)
     .digest('hex');
-  const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - timestamp) > 300) throw new Error('stale timestamp');
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+
+  const received = Buffer.from(signature, 'utf8');
+  const wanted = Buffer.from(expected, 'utf8');
+  return received.length === wanted.length && crypto.timingSafeEqual(received, wanted);
 }
 
-// Express example
-app.post('/payconnect/callback', (req, res) => {
-  try {
-    const ok = verify(
-      process.env.PAYCONNECT_SECRET,
-      req.headers['x-payconnect-timestamp'],
-      req.headers['x-payconnect-idempotency-key'],
-      req.body, // raw body string
-      req.headers['x-payconnect-signature'],
+// Keep the raw bytes: do not put express.json() before this route.
+app.post(
+  '/payconnect/callback',
+  express.raw({ type: 'application/json' }),
+  (req, res) => {
+    const ok = verifySignature(
+      process.env.PAYCONNECT_SECRET, // base64url secret shown in the dashboard
+      req.get('X-PayConnect-Timestamp'),
+      req.get('X-PayConnect-Idempotency-Key'),
+      req.body, // Buffer with the exact bytes PayConnect sent
+      req.get('X-PayConnect-Signature'),
     );
     if (!ok) return res.status(401).send('invalid signature');
-    // process req.body.event
+
+    const event = JSON.parse(req.body.toString('utf8'));
+    // process event
     res.status(200).send('ok');
-  } catch (err) {
-    res.status(400).send(err.message);
-  }
-};`}
+  },
+);`}
         </CodeBlock>
         <CodeBlock lang="Python" active={sigLang}>
           {`import hmac, hashlib, time
 from flask import request, abort
 
-SECRET = b'your-service-secret'
+SECRET = b'your-service-secret'  # base64url secret shown in the dashboard
 
 def verify(secret, timestamp, idempotency_key, raw_body, signature):
-    message = f"{timestamp}.{idempotency_key}.{raw_body}".encode()
+    message = timestamp.encode() + b'.' + idempotency_key.encode() + b'.' + raw_body
     expected = 'sha256=' + hmac.new(secret, message, hashlib.sha256).hexdigest()
     now = int(time.time())
     if abs(now - int(timestamp)) > 300:
@@ -631,14 +643,14 @@ def callback():
     try:
         ok = verify(
             SECRET,
-            request.headers.get('X-PayConnect-Timestamp'),
-            request.headers.get('X-PayConnect-Idempotency-Key'),
-            request.get_data(as_text=True),
-            request.headers.get('X-PayConnect-Signature'),
+            request.headers.get('X-PayConnect-Timestamp', ''),
+            request.headers.get('X-PayConnect-Idempotency-Key', ''),
+            request.get_data(cache=True),  # exact raw body bytes
+            request.headers.get('X-PayConnect-Signature', ''),
         )
         if not ok:
             abort(401, 'invalid signature')
-        event = request.json
+        event = request.get_json()
         return 'ok', 200
     except Exception as err:
         return str(err), 400`}
@@ -647,19 +659,26 @@ def callback():
           {`import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 public class Callback {
   static final byte[] SECRET = "your-service-secret".getBytes(StandardCharsets.UTF_8);
 
-  static boolean verify(String secret, long timestamp, String idempotencyKey,
-                        String rawBody, String signature) {
-    String message = timestamp + "." + idempotencyKey + "." + rawBody;
-    Mac mac = Mac.getInstance("HmacSHA256");
-    mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-    String expected = "sha256=" + bytesToHex(mac.doFinal(message.getBytes(StandardCharsets.UTF_8)));
+  static boolean verify(long timestamp, String idempotencyKey,
+                        byte[] rawBody, String signature) throws Exception {
     long now = System.currentTimeMillis() / 1000;
-    if (Math.abs(now - timestamp) > 300) throw new IllegalArgumentException("stale timestamp");
-    return java.util.Arrays.equals(signature.getBytes(), expected.getBytes());
+    if (signature == null || Math.abs(now - timestamp) > 300) return false;
+
+    Mac mac = Mac.getInstance("HmacSHA256");
+    mac.init(new SecretKeySpec(SECRET, "HmacSHA256"));
+    mac.update((timestamp + "." + idempotencyKey + ".").getBytes(StandardCharsets.UTF_8));
+    mac.update(rawBody);
+
+    String expected = "sha256=" + bytesToHex(mac.doFinal());
+    return MessageDigest.isEqual(
+      signature.getBytes(StandardCharsets.UTF_8),
+      expected.getBytes(StandardCharsets.UTF_8)
+    );
   }
 
   static String bytesToHex(byte[] bytes) {
@@ -669,6 +688,8 @@ public class Callback {
   }
 }`}
         </CodeBlock>
+
+        <p className="muted small-text">Capture the raw request body before parsing JSON. In Express, mount this route with <code>express.raw</code> before any <code>express.json()</code> middleware; in Flask, use <code>request.get_data()</code>. The HMAC key is the base64url secret exactly as shown in the dashboard.</p>
 
         <div className="section-head"><div><h4>Respond</h4></div></div>
         <div className="table-wrap">
