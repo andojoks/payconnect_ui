@@ -433,7 +433,7 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
 }`}</pre>
         <div className="details">
           <div><dt>profileId</dt><dd>Required; must be attached to this route (service credentials) or accessible to your session (dashboard).</dd></div>
-          <div><dt>phoneNumber</dt><dd>Required; the payer phone number the payment is expected from.</dd></div>
+          <div><dt>phoneNumber</dt><dd>Required; the payer phone number the payment is expected from. The alert must come from this number (last 9 digits); the profile phone is not a fallback.</dd></div>
           <div><dt>amount</dt><dd>Optional expected amount; matching tolerance is 0.01. Omit to match any amount.</dd></div>
           <div><dt>currency</dt><dd>Defaults to <code>XAF</code>.</dd></div>
           <div><dt>reference</dt><dd>Your order or invoice reference; echoed back in the callback.</dd></div>
@@ -526,7 +526,7 @@ HttpRequest request = HttpRequest.newBuilder()
 HttpResponse<String> res = client.send(request, BodyHandlers.ofString());`}
         </CodeBlock>
 
-        <div className="section-head"><div><h4>Track the intent</h4><p>Poll the same service with the same headers. Intents match in arrival order (FIFO) and one payment matches at most one intent per service. Status moves <code>pending</code> &rarr; <code>matched</code>, or to <code>expired</code> after two minutes / <code>cancelled</code>.</p></div></div>
+        <div className="section-head"><div><h4>Track the intent</h4><p>Poll the same service with the same headers. Intents match in arrival order (FIFO) and one payment matches at most one intent per service. The payer phone on the alert must match the intent phone (last 9 digits); the profile phone is not a fallback. Status moves <code>pending</code> &rarr; <code>matched</code>, or to <code>expired</code> after two minutes / <code>cancelled</code>.</p></div></div>
         <pre className="code-block">{`GET ${apiBase}/api/v1/services/{serviceId}/intents
 GET ${apiBase}/api/v1/services/{serviceId}/deliveries`}</pre>
       </section>
