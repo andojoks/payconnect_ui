@@ -583,7 +583,7 @@ GET ${apiBase}/api/v1/services/{serviceId}/deliveries`}</pre>
   body.notification?.parsedPhone,
   body.notification?.parsedFinancialTransactionID
 ]`}</pre>
-        <p className="muted small-text">Missing values become <code>null</code>. The signed message is <code>{'{timestamp}.{idempotencyKey}.{JSON.stringify(array)}'}</code>.</p>
+        <p className="muted small-text">Missing values become <code>null</code>. The same positions are used for every event type, so a <code>collection</code> event sends <code>null</code> for the matched-only positions. The signed message is <code>{'{timestamp}.{idempotencyKey}.{JSON.stringify(array)}'}</code>.</p>
 
         <div className="section-head"><div><h4>Body</h4></div></div>
         <pre className="code-block">{`{
@@ -594,18 +594,27 @@ GET ${apiBase}/api/v1/services/{serviceId}/deliveries`}</pre>
   "amount": 5000,
   "currency": "XAF",
   "reference": "INV-1001",
+  "idempotencyKey": "INV-1001",
+  "sourceServiceId": "...",
   "recipientName": "...",
   "financialTransactionId": "...",
   "transactionId": "...",
   "direction": "received",
+  "createdAt": "2026-11-11T11:59:58Z",
   "matchedAt": "2026-11-11T12:00:00Z",
   "notification": {
     "id": "...",
     "title": "MoMo alert",
-    "receivedAt": "2026-11-11T12:00:00Z"
+    "receivedAt": "2026-11-11T12:00:00Z",
+    "parsedDirection": "received",
+    "parsedAmount": 5000,
+    "parsedCurrency": "XAF",
+    "parsedRecipient": "...",
+    "parsedPhone": "+237XXXXXXXX",
+    "parsedFinancialTransactionID": "..."
   }
 }`}</pre>
-        <p className="muted small-text">A <code>collection</code> event posted through <code>{apiBase}/api/v1/collect</code> is delivered with the same shape but contains the caller-supplied <code>phoneNumber</code>, <code>amount</code>, <code>currency</code>, <code>reference</code>, and <code>sourceServiceId</code>.</p>
+        <p className="muted small-text">This is the full <code>collection.matched</code> shape. A <code>collection</code> event posted through <code>{apiBase}/api/v1/collect</code> contains only <code>event</code>, <code>phoneNumber</code>, <code>amount</code>, <code>currency</code>, <code>reference</code>, and <code>sourceServiceId</code>; the remaining signed positions are <code>null</code>.</p>
 
         <div className="section-head"><div><h4>Verify the signature</h4></div></div>
         <div className="code-tabs">

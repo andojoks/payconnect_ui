@@ -439,6 +439,7 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
           <section className="card inner-card">
             <div className="card-head"><div><h3>Callback contract</h3><p>Authenticate with the service secret and verify the field-based HMAC signature.</p></div></div>
             <pre className="code-block">{`POST ${service.callbackUrl}\nX-PayConnect-Signature-V2: sha256=<hmac>\nX-PayConnect-Signature-Version: 2\nX-PayConnect-Timestamp: <unix>\nX-PayConnect-Idempotency-Key: <key>\n\n{"event":"collection.matched","intentId":"...","phoneNumber":"...","amount":5000,"currency":"XAF","transactionId":"..."}`}</pre>
+            <p className="muted small-text">Abbreviated example. The full matched body also includes <code>profileId</code>, <code>reference</code>, <code>idempotencyKey</code>, <code>sourceServiceId</code>, <code>recipientName</code>, <code>financialTransactionId</code>, <code>direction</code>, <code>createdAt</code>, <code>matchedAt</code>, and the <code>notification.parsed*</code> fields. All of those are part of the signed field array; absent fields are <code>null</code>.</p>
           </section>
         </div>
 
