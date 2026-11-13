@@ -78,6 +78,7 @@ export function statusTone(status: string) {
     case 'failed':
     case 'reauthentication_required':
     case 'cancelled':
+    case 'expired':
       return 'danger';
     default:
       return 'neutral';

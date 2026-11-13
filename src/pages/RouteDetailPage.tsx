@@ -242,7 +242,6 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('XAF');
   const [reference, setReference] = useState('');
-  const [expires, setExpires] = useState('30');
   const [attachProfile, setAttachProfile] = useState('');
   const [name, setName] = useState(service.name);
   const [description, setDescription] = useState(service.description);
@@ -293,7 +292,7 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
         amount: amount ? Number(amount) : undefined,
         currency,
         reference,
-        expiresInMinutes: Number(expires) || undefined,
+        idempotencyKey: reference.trim() || undefined,
       });
     } catch (cause) {
       // Surface the server response so integration failures are actionable.
@@ -439,7 +438,7 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
           </section>
           <section className="card inner-card">
             <div className="card-head"><div><h3>Callback contract</h3><p>Send the secret and receive HMAC-signed JSON.</p></div></div>
-            <pre className="code-block">{`POST ${service.callbackUrl}\nX-PayConnect-Signature: sha256=<hmac>\nX-PayConnect-Timestamp: <unix>\nX-PayConnect-Idempotency-Key: <key>\n\n{"event":"collection.matched","intentId":"...","phoneNumber":"...","amount":5000,"currency":"XAF"}`}</pre>
+            <pre className="code-block">{`POST ${service.callbackUrl}\nX-PayConnect-Signature: sha256=<hmac>\nX-PayConnect-Timestamp: <unix>\nX-PayConnect-Idempotency-Key: <key>\n\n{"event":"collection.matched","intentId":"...","phoneNumber":"...","amount":5000,"currency":"XAF","transactionId":"..."}`}</pre>
           </section>
         </div>
 
@@ -564,7 +563,7 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
                   </select>
                 </label>
                 <label className="field"><span>Reference</span><input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Order reference" /></label>
-                <label className="field"><span>Expires in (minutes)</span><input value={expires} onChange={(event) => setExpires(event.target.value)} inputMode="numeric" /></label>
+                <p className="muted small-text">Intents expire after 2 minutes. Reusing the same reference updates the pending intent.</p>
                 {intentError && (
                   <div className="error" role="alert">
                     <strong>Intent POST failed — server response</strong>

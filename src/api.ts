@@ -107,7 +107,8 @@ export type Intent = {
   amount?: number;
   currency: string;
   reference: string;
-  status: 'pending' | 'matched' | 'cancelled' | string;
+  idempotencyKey?: string;
+  status: 'pending' | 'matched' | 'cancelled' | 'expired' | string;
   eventType: string;
   createdAt: string;
   expiresAt?: string;
@@ -295,7 +296,7 @@ export const api = {
   serviceIntents: (serviceId: string) => request<Intent[]>(`/api/v1/services/${serviceId}/intents`),
   createServiceIntent: (
     serviceId: string,
-    values: { profileId: string; phoneNumber: string; amount?: number; currency?: string; reference?: string; expiresInMinutes?: number },
+    values: { profileId: string; phoneNumber: string; amount?: number; currency?: string; reference?: string; idempotencyKey?: string; expiresInMinutes?: number },
   ) => request<{ id: string; status: string }>(`/api/v1/services/${serviceId}/intents`, { method: 'POST', body: JSON.stringify(values) }),
   cancelServiceIntent: (serviceId: string, intentId: string) =>
     request<void>(`/api/v1/services/${serviceId}/intents/${intentId}`, { method: 'DELETE' }),

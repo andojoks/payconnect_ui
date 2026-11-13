@@ -417,6 +417,7 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
               <tr><td><code>X-PayConnect-Service</code></td><td>Service ID from the route details page; must match <code>{'{serviceId}'}</code>.</td></tr>
               <tr><td><code>X-PayConnect-Secret</code></td><td>Signing secret shown when the route is created or rotated.</td></tr>
               <tr><td><code>Content-Type</code></td><td><code>application/json</code></td></tr>
+              <tr><td><code>Idempotency-Key</code></td><td>Optional; same value as the body <code>idempotencyKey</code>. Used when the body field is omitted.</td></tr>
             </tbody>
           </table>
         </div>
@@ -428,7 +429,7 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
   "amount": 5000,
   "currency": "XAF",
   "reference": "INV-1001",
-  "expiresInMinutes": 30
+  "idempotencyKey": "INV-1001"
 }`}</pre>
         <div className="details">
           <div><dt>profileId</dt><dd>Required; must be attached to this route (service credentials) or accessible to your session (dashboard).</dd></div>
@@ -436,10 +437,11 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
           <div><dt>amount</dt><dd>Optional expected amount; matching tolerance is 0.01. Omit to match any amount.</dd></div>
           <div><dt>currency</dt><dd>Defaults to <code>XAF</code>.</dd></div>
           <div><dt>reference</dt><dd>Your order or invoice reference; echoed back in the callback.</dd></div>
-          <div><dt>expiresInMinutes</dt><dd>Defaults to <code>30</code>; capped at <code>1440</code>.</dd></div>
+          <div><dt>idempotencyKey</dt><dd>Reuse the same key (or the same reference) to update a pending intent. Matched or cancelled intents return <code>409</code>.</dd></div>
+          <div><dt>expiresInMinutes</dt><dd>Optional; defaults to <code>2</code> and is capped at <code>2</code>. Pending intents are marked <code>expired</code> automatically.</dd></div>
         </div>
 
-        <div className="section-head"><div><h4>Response (201)</h4></div></div>
+        <div className="section-head"><div><h4>Response (201 new, 200 updated)</h4></div></div>
         <pre className="code-block">{`{
   "id": "intent-uuid",
   "status": "pending",
@@ -447,7 +449,10 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
   "phoneNumber": "+237XXXXXXXX",
   "amount": 5000,
   "currency": "XAF",
-  "expiresInMinutes": 30
+  "reference": "INV-1001",
+  "idempotencyKey": "INV-1001",
+  "expiresInMinutes": 2,
+  "created": true
 }`}</pre>
 
         <div className="section-head"><div><h4>Code examples</h4></div></div>
@@ -470,7 +475,7 @@ const res = await fetch(\`${apiBase}/api/v1/services/\${SERVICE_ID}/intents\`, {
     amount: 5000,
     currency: 'XAF',
     reference: 'INV-1001',
-    expiresInMinutes: 30,
+    idempotencyKey: 'INV-1001',
   }),
 });
 if (!res.ok) throw new Error(await res.text());
@@ -493,7 +498,7 @@ payload = {
     'amount': 5000,
     'currency': 'XAF',
     'reference': 'INV-1001',
-    'expiresInMinutes': 30,
+    'idempotencyKey': 'INV-1001',
 }
 res = requests.post(url, json=payload, headers=headers)
 res.raise_for_status()
@@ -514,14 +519,14 @@ HttpRequest request = HttpRequest.newBuilder()
           "amount": 5000,
           "currency": "XAF",
           "reference": "INV-1001",
-          "expiresInMinutes": 30
+          "idempotencyKey": "INV-1001"
         }
     """))
     .build();
 HttpResponse<String> res = client.send(request, BodyHandlers.ofString());`}
         </CodeBlock>
 
-        <div className="section-head"><div><h4>Track the intent</h4><p>Poll the same service with the same headers. Status moves <code>pending</code> &rarr; <code>matched</code>, or stays <code>pending</code> until it expires / is cancelled.</p></div></div>
+        <div className="section-head"><div><h4>Track the intent</h4><p>Poll the same service with the same headers. Intents match in arrival order (FIFO) and one payment matches at most one intent per service. Status moves <code>pending</code> &rarr; <code>matched</code>, or to <code>expired</code> after two minutes / <code>cancelled</code>.</p></div></div>
         <pre className="code-block">{`GET ${apiBase}/api/v1/services/{serviceId}/intents
 GET ${apiBase}/api/v1/services/{serviceId}/deliveries`}</pre>
       </section>
@@ -560,6 +565,7 @@ GET ${apiBase}/api/v1/services/{serviceId}/deliveries`}</pre>
   "reference": "INV-1001",
   "recipientName": "...",
   "financialTransactionId": "...",
+  "transactionId": "...",
   "direction": "received",
   "matchedAt": "2026-11-11T12:00:00Z",
   "notification": {
