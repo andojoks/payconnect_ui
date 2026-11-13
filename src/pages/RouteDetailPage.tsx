@@ -26,7 +26,7 @@ function SecretModal({ service, onClose }: { service: Service; onClose: () => vo
           <button className="icon-button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
         <p className="modal-copy">
-          Store this secret now. It signs every callback with HMAC-SHA256 and will not be shown again. Use it as the <code>X-PayConnect-Secret</code> value when calling <code>/collect</code>.
+          Store this secret now. It signs every callback with HMAC-SHA256 and will not be shown again. Use it as the <code>X-PayConnect-Secret</code> value when creating intents or posting collections.
         </p>
         <div className="secret-box">
           <code>{secret}</code>
@@ -415,7 +415,7 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
           </section>
           <section className="card inner-card">
             <div className="card-head"><div><h3>Callback contract</h3><p>Send the secret and receive HMAC-signed JSON.</p></div></div>
-            <pre className="code-block">{`POST ${service.callbackUrl}\nX-PayConnect-Signature: <hmac>\nX-PayConnect-Timestamp: <unix>\nX-PayConnect-Idempotency-Key: <key>\n\n{"event":"notification","phoneNumber":"...","amount":5000,"currency":"XAF"}`}</pre>
+            <pre className="code-block">{`POST ${service.callbackUrl}\nX-PayConnect-Signature: sha256=<hmac>\nX-PayConnect-Timestamp: <unix>\nX-PayConnect-Idempotency-Key: <key>\n\n{"event":"collection.matched","intentId":"...","phoneNumber":"...","amount":5000,"currency":"XAF"}`}</pre>
           </section>
         </div>
 
