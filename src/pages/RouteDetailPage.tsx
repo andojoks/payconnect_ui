@@ -564,7 +564,7 @@ function ServiceConsole({ service, profiles, tab, onRefresh, onRotated, onToast 
                   </select>
                 </label>
                 <label className="field"><span>Reference</span><input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Order reference" /></label>
-                <p className="muted small-text">Intents expire after 2 minutes. Reusing the same reference updates the pending intent.</p>
+                <p className="muted small-text">Intents expire after 6 minutes. Reusing the same reference updates the pending intent.</p>
                 {intentError && (
                   <div className="error" role="alert">
                     <strong>Intent POST failed — server response</strong>

@@ -438,7 +438,7 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
           <div><dt>currency</dt><dd>Defaults to <code>XAF</code>.</dd></div>
           <div><dt>reference</dt><dd>Your order or invoice reference; echoed back in the callback.</dd></div>
           <div><dt>idempotencyKey</dt><dd>Reuse the same key (or the same reference) to update a pending intent. Matched or cancelled intents return <code>409</code>.</dd></div>
-          <div><dt>expiresInMinutes</dt><dd>Optional; defaults to <code>2</code> and is capped at <code>2</code>. Pending intents are marked <code>expired</code> automatically.</dd></div>
+          <div><dt>expiresInMinutes</dt><dd>Optional; defaults to <code>6</code> and is capped at <code>6</code>. Pending intents are marked <code>expired</code> automatically.</dd></div>
         </div>
 
         <div className="section-head"><div><h4>Response (201 new, 200 updated)</h4></div></div>
@@ -451,7 +451,7 @@ function IntegrationGuide({ sigLang, setSigLang, intentLang, setIntentLang }: { 
   "currency": "XAF",
   "reference": "INV-1001",
   "idempotencyKey": "INV-1001",
-  "expiresInMinutes": 2,
+  "expiresInMinutes": 6,
   "created": true
 }`}</pre>
 
@@ -526,7 +526,7 @@ HttpRequest request = HttpRequest.newBuilder()
 HttpResponse<String> res = client.send(request, BodyHandlers.ofString());`}
         </CodeBlock>
 
-        <div className="section-head"><div><h4>Track the intent</h4><p>Poll the same service with the same headers. Intents match in arrival order (FIFO) and one payment matches at most one intent per service. The payer phone on the alert must match the intent phone (last 9 digits); the profile phone is not a fallback. Status moves <code>pending</code> &rarr; <code>matched</code>, or to <code>expired</code> after two minutes / <code>cancelled</code>.</p></div></div>
+        <div className="section-head"><div><h4>Track the intent</h4><p>Poll the same service with the same headers. Intents match in arrival order (FIFO) and one payment matches at most one intent per service. The payer phone on the alert must match the intent phone (last 9 digits); the profile phone is not a fallback. Status moves <code>pending</code> &rarr; <code>matched</code>, or to <code>expired</code> after six minutes / <code>cancelled</code>.</p></div></div>
         <pre className="code-block">{`GET ${apiBase}/api/v1/services/{serviceId}/intents
 GET ${apiBase}/api/v1/services/{serviceId}/deliveries`}</pre>
       </section>
